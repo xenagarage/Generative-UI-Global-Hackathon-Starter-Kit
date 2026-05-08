@@ -32,19 +32,19 @@ LangChain Deep Agents is a Python framework that gives an LLM agent built-in pla
 
 ### Gemini
 
-Gemini 3.1 Flash-Lite is Google's high-volume workhorse in the Gemini 3 family — fast, cheap, and tool-calling-capable. The kit defaults to **`gemini-3.1-flash-lite`** for chat — pick up an API key from [Google AI Studio](https://aistudio.google.com), drop it into `.env`, and you're done. Need a more reasoning-heavy model? Swap to **Gemini 3 Pro Preview** or **Gemini 3 Flash** with a one-line edit in `agent/src/runtime.py` (`_gemini_llm`). Swapping to OpenAI, Anthropic, or any other LangChain-supported model is also a one-line edit (see [Switching to a different model](#switching-to-a-different-model) below).
+Gemini 3.1 Flash-Lite is Google's high-volume workhorse in the Gemini 3 family — fast, cheap, and tool-calling-capable. The kit defaults to **`gemini-3.1-flash-lite`** for chat — pick up an API key from [Google AI Studio](https://aistudio.google.com), drop it into `.env`, and you're done. Need a more reasoning-heavy model? Swap to **Gemini 3 Pro Preview** or **Gemini 3 Flash** with a one-line edit in `apps/agent/src/runtime.py` (`_gemini_llm`). Swapping to OpenAI, Anthropic, or any other LangChain-supported model is also a one-line edit (see [Switching to a different model](#switching-to-a-different-model) below).
 
 [More about Gemini ->](https://ai.google.dev/gemini-api/docs)
 
 ### Notion MCP (via mcp-use)
 
-The kit ships with a **Notion Leads database demo** wired through the official [Notion MCP server](https://github.com/makenotion/notion-mcp-server) (`@notionhq/notion-mcp-server`), called from Python via [mcp-use](https://manufact.com/mcp-use). MCP is the open protocol for connecting LLMs to tools — Anthropic publishes it, and Notion ships a first-party server. Swap to any other MCP server (Linear, Slack, GitHub, Google Drive, …) by changing one config dict in `agent/src/notion_mcp.py` and updating the prompt's `INTEGRATION_PROMPT`.
+The kit ships with a **Notion Leads database demo** wired through the official [Notion MCP server](https://github.com/makenotion/notion-mcp-server) (`@notionhq/notion-mcp-server`), called from Python via [mcp-use](https://manufact.com/mcp-use). MCP is the open protocol for connecting LLMs to tools — Anthropic publishes it, and Notion ships a first-party server. Swap to any other MCP server (Linear, Slack, GitHub, Google Drive, …) by changing one config dict in `apps/agent/src/notion_mcp.py` and updating the prompt's `INTEGRATION_PROMPT`.
 
 [More about MCP ->](https://modelcontextprotocol.io)
 
 ### Manufact / mcp-use
 
-The kit's `mcp/` package is an MCP server built with [`mcp-use`](https://manufact.com/mcp-use), an open-source TypeScript framework for building MCP servers and MCP Apps. `npm run dev:mcp` gives you a full development environment with a local Inspector and support for hot reload for quick iteration. Easily deploy the server to [Manufact Cloud](https://manufact.com) with `npm run -w mcp deploy`.
+The kit's `apps/mcp/` package is an MCP server built with [`mcp-use`](https://manufact.com/mcp-use), an open-source TypeScript framework for building MCP servers and MCP Apps. `npm run dev:mcp` gives you a full development environment with a local Inspector and support for hot reload for quick iteration. Easily deploy the server to [Manufact Cloud](https://manufact.com) with `npm run -w mcp deploy`.
 
 [More about Manufact ->](https://manufact.com)
 
@@ -55,7 +55,7 @@ The kit's `mcp/` package is an MCP server built with [`mcp-use`](https://manufac
 Here's how to try out 🪁 **CopilotKit Intelligence**:
 
 1. Run `npx @copilotkit/cli@latest init` and select **Intelligence** when prompted (see the canonical flow at [docs.copilotkit.ai/threads](https://docs.copilotkit.ai/threads))
-2. Drop a Gemini API key in **both** `.env` and `agent/.env` (see [Get a Gemini API key](#get-a-gemini-api-key-required) below — OpenAI works if you swap the model back), plus a Notion integration token + database id (see [Notion MCP setup](#notion-mcp-setup-notion-lead-form-demo)).
+2. Drop a Gemini API key in **both** `.env` and `apps/agent/.env` (see [Get a Gemini API key](#get-a-gemini-api-key-required) below — OpenAI works if you swap the model back), plus a Notion integration token + database id (see [Notion MCP setup](#notion-mcp-setup-notion-lead-form-demo)).
 3. Run `npm install` then `npm run dev` (or `npm run dev:full` if you want the MCP demo too)
 
 > **⚠ Don't skip step 3.** `npm run dev` runs a pre-flight check (`scripts/check-env.sh`) before booting anything — it'll fail loudly with a numbered list of any missing keys, an unreachable Notion database, or a Docker daemon that isn't running. Fix everything it lists, re-run, and you're off. See [Troubleshooting](#troubleshooting) at the bottom for fixes for each failure mode.
@@ -81,7 +81,7 @@ Then drop it into both env files:
 # .env (root, used by the BFF + Next.js)
 GEMINI_API_KEY=AIza...
 
-# agent/.env (used by langgraph dev)
+# apps/agent/.env (used by langgraph dev)
 GEMINI_API_KEY=AIza...
 ```
 
@@ -98,15 +98,15 @@ no code edit needed:
 | `gemini-flash-deep`    | `gemini-3.1-flash-lite` | `deepagents`                     |
 | `gemini-flash-react`   | `gemini-3.1-flash-lite` | `langchain.create_agent` (react) |
 
-Set in **both** `.env` and `agent/.env` (the agent reads its own copy):
+Set in **both** `.env` and `apps/agent/.env` (the agent reads its own copy):
 
 ```bash
 AGENT_RUNTIME=gemini-flash-deep
 ```
 
 A third runtime (`claude-sonnet-4-6-react`) is also wired in
-[`agent/src/runtime.py`](agent/src/runtime.py) (`_build_claude_react`) if
-you'd rather run Claude — set `ANTHROPIC_API_KEY` in `agent/.env` and flip
+[`apps/agent/src/runtime.py`](apps/agent/src/runtime.py) (`_build_claude_react`) if
+you'd rather run Claude — set `ANTHROPIC_API_KEY` in `apps/agent/.env` and flip
 `AGENT_RUNTIME` to it. Use it as a template for any other LangChain
 provider.
 
@@ -115,7 +115,7 @@ Restart the agent (`npm run dev:agent`) and you should see
 
 Want a different Gemini tier (`gemini-3-pro-preview`, `gemini-3-flash`) or
 a different provider entirely (OpenAI, etc.)? Edit
-`agent/src/runtime.py` — `_gemini_llm()` is the single place the model id
+`apps/agent/src/runtime.py` — `_gemini_llm()` is the single place the model id
 lives, and `_build_*` factories show the LangChain provider import pattern
 to copy for a new provider. Re-run `cd agent && uv sync` if you add a new
 LangChain integration package.
@@ -134,7 +134,7 @@ The kit calls Notion through the official [Notion MCP server](https://github.com
 1. Create a Notion integration: go to https://notion.so/my-integrations → **New integration** → name it (e.g. "Hackathon kit") → copy the **Internal Integration Token**.
 2. Open the Notion database you want to read from — either the sample above (duplicated into your workspace) or your own database with the same shape.
 3. **Share the database with your integration**: open the database in Notion → click the `...` menu (top-right) → **Connections** → add the integration you just created. *Notion's per-database access model means a fresh token sees zero databases until it's been shared into them — this is the most common point of failure.*
-4. Paste both into `agent/.env` (and `.env`):
+4. Paste both into `apps/agent/.env` (and `.env`):
 
    ```bash
    NOTION_TOKEN=<paste the Internal Integration Token>
@@ -143,13 +143,13 @@ The kit calls Notion through the official [Notion MCP server](https://github.com
 
 5. Restart the agent. Try: **"Import the workshop leads."**
 
-To use a different MCP server (Linear, Slack, GitHub, …), edit `agent/src/notion_mcp.py` — replace the `mcpServers` config dict and update `mcp_query_data_source` / friends to call the new server's tool names. Then edit `agent/src/prompts.py` (`INTEGRATION_PROMPT`) so the agent knows the new vocabulary.
+To use a different MCP server (Linear, Slack, GitHub, …), edit `apps/agent/src/notion_mcp.py` — replace the `mcpServers` config dict and update `mcp_query_data_source` / friends to call the new server's tool names. Then edit `apps/agent/src/prompts.py` (`INTEGRATION_PROMPT`) so the agent knows the new vocabulary.
 
 ---
 
 ## Manufact and mcp-use setup
 
-The starter ships with a [mcp-use](https://manufact.com/mcp-use) MCP server in `mcp/`. Run it alongside the rest of the stack:
+The starter ships with a [mcp-use](https://manufact.com/mcp-use) MCP server in `apps/mcp/`. Run it alongside the rest of the stack:
 
 ### Run it locally
 
@@ -193,7 +193,7 @@ Once deployed, point the runtime at it by setting `MCP_SERVER_URL` in `.env`.
 
 ### Want to start with a fresh server?
 
-The kit's `mcp/` is hand-authored to fit the workspace (port `3011`, workspace-aware scripts, kit-specific demo widget). If you'd rather scaffold a brand-new MCP server from scratch use the official `create-mcp-use-app` CLI:
+The kit's `apps/mcp/` is hand-authored to fit the workspace (port `3011`, workspace-aware scripts, kit-specific demo widget). If you'd rather scaffold a brand-new MCP server from scratch use the official `create-mcp-use-app` CLI:
 
 ```bash
 npx create-mcp-use-app@latest my-mcp-server
@@ -331,7 +331,7 @@ sequenceDiagram
 
 ### Add a new card type
 
-1. **Extend the type union** in `src/lib/canvas/types.ts`:
+1. **Extend the type union** in `apps/frontend/src/lib/canvas/types.ts`:
 
    ```ts
    export type CardType = "project" | "entity" | "note" | "chart" | "yourNewCard";
@@ -339,31 +339,31 @@ sequenceDiagram
 
 2. **Define its data shape** in the same file (`YourNewCardData` interface).
 
-3. **Render it** in `src/components/canvas/CardRenderer.tsx` — add a branch for the new `type`.
+3. **Render it** in `apps/frontend/src/components/canvas/CardRenderer.tsx` — add a branch for the new `type`.
 
-4. **Tell the agent about it** in `agent/src/prompts.py` — extend `FIELD_SCHEMA` inside `CANVAS_PROMPT`.
+4. **Tell the agent about it** in `apps/agent/src/prompts.py` — extend `FIELD_SCHEMA` inside `CANVAS_PROMPT`.
 
-5. **Add a frontend tool** for at least one mutation. **Declare it on the React side only** — `useFrontendTool({ name, description, parameters: z.object({...}), handler })` in `src/app/page.tsx`. The runtime forwards it to the agent at run time. Don't add the same tool to `agent/main.py`'s `tools=` list — Gemini rejects duplicate declarations with `"Duplicate function declaration found"`. The Python stubs in `agent/src/canvas.py` are documentation only.
+5. **Add a frontend tool** for at least one mutation. **Declare it on the React side only** — `useFrontendTool({ name, description, parameters: z.object({...}), handler })` in `apps/frontend/src/app/leads/page.tsx`. The runtime forwards it to the agent at run time. Don't add the same tool to `apps/agent/main.py`'s `tools=` list — Gemini rejects duplicate declarations with `"Duplicate function declaration found"`. The Python stubs in `apps/agent/src/canvas.py` are documentation only.
 
 ### Swap the integration MCP server
 
 1. Find an MCP server for your new integration (the [MCP server registry](https://github.com/modelcontextprotocol/servers) has dozens — Linear, Slack, GitHub, Google Drive, etc.).
-2. Edit `agent/src/notion_mcp.py` → replace the `mcpServers` config dict (`command`, `args`, `env`) with the new server's. Update the wrapper functions (`mcp_query_data_source`, etc.) to call the new server's tool names.
-3. Edit `agent/src/notion_integration.py` → adjust the row-shaping logic if your new integration's response shape differs.
-4. Edit `agent/src/prompts.py` → `INTEGRATION_PROMPT`. Replace the Notion lead-form workflow prose with whatever the new integration expects (e.g. "When the user asks to file a bug, call `linear_create_issue` with…").
+2. Edit `apps/agent/src/notion_mcp.py` → replace the `mcpServers` config dict (`command`, `args`, `env`) with the new server's. Update the wrapper functions (`mcp_query_data_source`, etc.) to call the new server's tool names.
+3. Edit `apps/agent/src/notion_integration.py` → adjust the row-shaping logic if your new integration's response shape differs.
+4. Edit `apps/agent/src/prompts.py` → `INTEGRATION_PROMPT`. Replace the Notion lead-form workflow prose with whatever the new integration expects (e.g. "When the user asks to file a bug, call `linear_create_issue` with…").
 5. Restart the agent. Done.
 
 ### Add an MCP App tool
 
 Three flavors depending on scope:
 
-- **One more tool on the existing server.** Edit `mcp/index.ts`, add another `server.tool({ ... }, async (input) => widget({ ... }))`. The runtime auto-discovers it on the next reload.
-- **A second MCP server alongside the kit's.** Scaffold with `npx create-mcp-use-app@latest <name>` (the official Manufact CLI) and register it in `bff/src/server.ts` under `mcpApps.servers[]`. Useful when you want a clean separation between domains.
+- **One more tool on the existing server.** Edit `apps/mcp/index.ts`, add another `server.tool({ ... }, async (input) => widget({ ... }))`. The runtime auto-discovers it on the next reload.
+- **A second MCP server alongside the kit's.** Scaffold with `npx create-mcp-use-app@latest <name>` (the official Manufact CLI) and register it in `apps/bff/src/server.ts` under `mcpApps.servers[]`. Useful when you want a clean separation between domains.
 - **A remote MCP server.** Set `MCP_SERVER_URL` in `.env` to someone else's deploy (Excalidraw, etc.) — the runtime swaps without code changes.
 
 ### Use runtime context from the UI
 
-If you need to feed UI state (selected card, current view) into the agent's prompt, use `useAgentContext({ description, value })` from `@copilotkit/react-core/v2` inside a client component. The provided value is JSON-serialized and threaded into the agent's context on every turn — composing with the static `SYSTEM_PROMPT` defined in `agent/src/prompts.py`.
+If you need to feed UI state (selected card, current view) into the agent's prompt, use `useAgentContext({ description, value })` from `@copilotkit/react-core/v2` inside a client component. The provided value is JSON-serialized and threaded into the agent's context on every turn — composing with the static `SYSTEM_PROMPT` defined in `apps/agent/src/prompts.py`.
 
 ---
 
@@ -396,14 +396,14 @@ If you can't or don't want to use the CLI:
    docker compose up -d --wait
    ```
    This pulls `ghcr.io/copilotkit/intelligence/composite` and starts Postgres + Redis alongside.
-3. Copy env templates: `cp .env.example .env` and `cp agent/.env.example agent/.env`. Paste your keys.
+3. Copy env templates: `cp .env.example .env` and `cp apps/agent/.env.example apps/agent/.env`. Paste your keys.
 4. Install + run:
    ```bash
    npm install
    npm run dev
    ```
 
-The intelligence env vars (`INTELLIGENCE_API_URL`, `INTELLIGENCE_GATEWAY_WS_URL`, `INTELLIGENCE_API_KEY`) match `docker-compose.yml`'s defaults — no manual editing needed for local dev.
+The intelligence env vars (`INTELLIGENCE_API_URL`, `INTELLIGENCE_GATEWAY_WS_URL`, `INTELLIGENCE_API_KEY`) match `deployment/docker-compose.yml`'s defaults — no manual editing needed for local dev.
 
 ---
 
@@ -413,10 +413,10 @@ If you can't run Docker, strip Intelligence and use the kit as a plain CopilotKi
 
 | Action | Path |
 |---|---|
-| Edit | `bff/src/server.ts` — remove `intelligence`, `identifyUser`, `licenseToken` from the `CopilotRuntime` constructor (and the `CopilotKitIntelligence` import + instantiation) |
-| Edit | `src/app/page.tsx` — remove `<ThreadsDrawer>` wrapper |
-| Delete | `src/components/threads-drawer/` |
-| Delete | `docker-compose.yml`, `docker/init-db/` |
+| Edit | `apps/bff/src/server.ts` — remove `intelligence`, `identifyUser`, `licenseToken` from the `CopilotRuntime` constructor (and the `CopilotKitIntelligence` import + instantiation) |
+| Edit | `apps/frontend/src/app/leads/page.tsx` — remove `<ThreadsDrawer>` wrapper |
+| Delete | `apps/frontend/src/components/threads-drawer/` |
+| Delete | `deployment/docker-compose.yml`, `deployment/init-db/` |
 | Edit | `.env.example` — remove `COPILOTKIT_LICENSE_TOKEN` and `INTELLIGENCE_*` |
 
 ---
@@ -480,9 +480,9 @@ expanded explanations.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `npm run dev` aborts with "Docker isn't running" | Docker Desktop not started | Start Docker Desktop and re-run. The pre-flight retries automatically. |
-| Pre-flight prints "GEMINI_API_KEY is unset (or a stub)" | Gemini key not pasted into `agent/.env` | Get one at https://aistudio.google.com → Get API key, paste into `agent/.env` (and `.env`). |
-| Pre-flight prints "NOTION_TOKEN is unset" | Notion token not pasted | Create an integration at https://notion.so/my-integrations and paste the Internal Integration Token into `agent/.env`. |
-| Chat hangs forever, never replies | `GEMINI_API_KEY` not set when you skipped the pre-flight (e.g. ran `npm run dev:agent` directly) | Set it in `agent/.env` and restart the agent. The agent now answers in <3s with a setup pointer when the key is missing instead of hanging. |
+| Pre-flight prints "GEMINI_API_KEY is unset (or a stub)" | Gemini key not pasted into `apps/agent/.env` | Get one at https://aistudio.google.com → Get API key, paste into `apps/agent/.env` (and `.env`). |
+| Pre-flight prints "NOTION_TOKEN is unset" | Notion token not pasted | Create an integration at https://notion.so/my-integrations and paste the Internal Integration Token into `apps/agent/.env`. |
+| Chat hangs forever, never replies | `GEMINI_API_KEY` not set when you skipped the pre-flight (e.g. ran `npm run dev:agent` directly) | Set it in `apps/agent/.env` and restart the agent. The agent now answers in <3s with a setup pointer when the key is missing instead of hanging. |
 | Toast: "Run `npm run seed` to seed the default user" | Postgres `default` / `1_default` user not seeded | Run `npm run seed`. The BFF rewrites the upstream `threads_user_id_fkey` 500 into this hint automatically. |
 | Notion health check returns "0 rows" or "shared with this integration" | Database not shared with your integration | Open the database in Notion → `...` menu → **Connections** → **+ Add connection** → pick your integration **directly** (not via parent-page inheritance — that's the most common gotcha). |
 | `Could not find database with ID …` | Wrong `NOTION_LEADS_DATABASE_ID` *or* not shared | Both — verify by running `cd agent && uv run python -m src.notion_tools --check`. The output names which one is wrong. |
@@ -503,7 +503,7 @@ Intelligence isn't running. Check:
 <details>
 <summary><strong>Gemini quota exceeded</strong></summary>
 
-Free tier is generous but not infinite. Either wait, switch to a paid Gemini key, or temporarily swap the model id in `agent/src/runtime.py` (`_gemini_llm`) to `gemini-3-flash` (frontier-class quality) or `gemini-3-pro-preview` (more reasoning, slower) — each tier has its own quota.
+Free tier is generous but not infinite. Either wait, switch to a paid Gemini key, or temporarily swap the model id in `apps/agent/src/runtime.py` (`_gemini_llm`) to `gemini-3-flash` (frontier-class quality) or `gemini-3-pro-preview` (more reasoning, slower) — each tier has its own quota.
 
 </details>
 
@@ -511,7 +511,7 @@ Free tier is generous but not infinite. Either wait, switch to a paid Gemini key
 <summary><strong>Agent says "I'm having trouble connecting to my tools"</strong></summary>
 
 1. Is the agent running? Check the `agent` log line in your terminal — it should print `Application startup complete` and bind to `:8133`.
-2. Is `GEMINI_API_KEY` set in `agent/.env`?
+2. Is `GEMINI_API_KEY` set in `apps/agent/.env`?
 3. Run `cd agent && uv run langgraph dev --port 8133` directly to see the actual error.
 
 </details>
@@ -519,10 +519,10 @@ Free tier is generous but not infinite. Either wait, switch to a paid Gemini key
 <details>
 <summary><strong>Notion import returns 0 rows or "unauthorized"</strong></summary>
 
-1. Verify `NOTION_TOKEN` is set in `agent/.env` and starts with `secret_` or `ntn_`. Get one at https://notion.so/my-integrations.
+1. Verify `NOTION_TOKEN` is set in `apps/agent/.env` and starts with `secret_` or `ntn_`. Get one at https://notion.so/my-integrations.
 2. **Share the database with your integration.** This is the most common point of failure — Notion's per-database access model means a fresh integration token sees zero databases until they're explicitly shared with it. In the database in Notion: `...` menu → **Connections** → add your integration.
 3. Verify `NOTION_LEADS_DATABASE_ID` matches the database (paste it from the Notion URL, hyphens optional).
-4. From `agent/`, run `uv run python -c "from src.notion_integration import health_check; import json; print(json.dumps(health_check(), indent=2))"` to see the failure verbatim.
+4. From `apps/agent/`, run `uv run python -c "from src.notion_integration import health_check; import json; print(json.dumps(health_check(), indent=2))"` to see the failure verbatim.
 
 </details>
 
