@@ -38,13 +38,13 @@ Gemini 3.1 Flash-Lite is Google's high-volume workhorse in the Gemini 3 family �
 
 ### Notion MCP (via mcp-use)
 
-The kit ships with a **Notion Leads database demo** wired through the official [Notion MCP server](https://github.com/makenotion/notion-mcp-server) (`@notionhq/notion-mcp-server`), called from Python via [mcp-use](https://manufact.com). MCP is the open protocol for connecting LLMs to tools — Anthropic publishes it, and Notion ships a first-party server. Swap to any other MCP server (Linear, Slack, GitHub, Google Drive, …) by changing one config dict in `agent/src/notion_mcp.py` and updating the prompt's `INTEGRATION_PROMPT`.
+The kit ships with a **Notion Leads database demo** wired through the official [Notion MCP server](https://github.com/makenotion/notion-mcp-server) (`@notionhq/notion-mcp-server`), called from Python via [mcp-use](https://manufact.com/mcp-use). MCP is the open protocol for connecting LLMs to tools — Anthropic publishes it, and Notion ships a first-party server. Swap to any other MCP server (Linear, Slack, GitHub, Google Drive, …) by changing one config dict in `agent/src/notion_mcp.py` and updating the prompt's `INTEGRATION_PROMPT`.
 
 [More about MCP ->](https://modelcontextprotocol.io)
 
-### Manufact (mcp-use)
+### Manufact / mcp-use
 
-Manufact is a deployment platform for MCP servers built around the open-source `mcp-use` framework. The kit's `mcp/` package is a single-file MCP server that gives the agent a third surface — runnable inside Claude or ChatGPT directly. `npm run dev:mcp -- --tunnel` exposes it via a public HTTPS URL with no deploy; `npm run -w mcp deploy` ships it to Manufact Cloud with one command.
+The kit's `mcp/` package is an MCP server built with [`mcp-use`](https://manufact.com/mcp-use), an open-source TypeScript framework for building MCP servers and MCP Apps. `npm run dev:mcp` gives you a full development environment with a local Inspector and support for hot reload for quick iteration. Easily deploy the server to [Manufact Cloud](https://manufact.com) with `npm run -w mcp deploy`.
 
 [More about Manufact ->](https://manufact.com)
 
@@ -147,29 +147,32 @@ To use a different MCP server (Linear, Slack, GitHub, …), edit `agent/src/noti
 
 ---
 
-## Manufact / MCP — the third surface
+## Manufact and mcp-use setup
 
-Your starter ships with a [Manufact](https://manufact.com) MCP server in `mcp/`. Run it alongside the rest of the stack:
+The starter ships with a [mcp-use](https://manufact.com/mcp-use) MCP server in `mcp/`. Run it alongside the rest of the stack:
+
+### Run it locally
 
 ```bash
 npm run dev:full
 ```
 
-This adds the MCP leg on `:3011`. Open `http://localhost:3011/inspector` to test tools without leaving your machine.
+This adds the MCP leg on `:3011`. Open `http://localhost:3011/inspector` to test your tools and widgets interactively with the built-in Inspector.
 
-### In-Claude / in-ChatGPT testing (no deploy)
+### Test it in Claude / ChatGPT (no deploy)
+
+Start the dev server with a built-in tunnel to get a public HTTPS URL instantly — no deployment needed:
 
 ```bash
 npm run -w mcp dev -- --tunnel
 ```
 
-Prints a stable public HTTPS URL like `https://<subdomain>.tunnel.manufact.com/mcp`. Add it as a remote MCP server:
+This opens a public HTTPS URL like `https://<subdomain>.local.mcp-use.run/mcp`. Add it as a remote MCP server:
 
 - **Claude:** Settings → Integrations → Add integration → paste URL
 - **ChatGPT:** Settings → Connectors → Add MCP server → paste URL
 
 Smoke-test prompts (sample data is baked into each widget — no setup needed):
-
 - "Show me the workshop lead list." → `show-lead-list`
 - "Show the workshop demand breakdown." → `show-lead-demand`
 - "Show me the lead pipeline." → `show-lead-pipeline`
@@ -177,23 +180,27 @@ Smoke-test prompts (sample data is baked into each widget — no setup needed):
 ### Deploy to Manufact Cloud
 
 ```bash
+# Login to Manufact Cloud
+npx @mcp-use/cli login
+
+# Deploy
 npm run -w mcp deploy
 ```
 
-Live at `https://<your-slug>.run.manufact.com/mcp` and managed from [manufact.com/cloud/servers](https://manufact.com/cloud/servers).
+Live at `https://<your-slug>.run.mcp-use.com/mcp` and managed from [manufact.com/cloud](https://manufact.com/cloud).
 
 Once deployed, point the runtime at it by setting `MCP_SERVER_URL` in `.env`.
 
-### Want a fresh server alongside this one?
+### Want to start with a fresh server?
 
-The kit's `mcp/` is hand-authored to fit the workspace (port `3011`, workspace-aware scripts, kit-specific demo widget). If you'd rather scaffold a brand-new MCP server from scratch — different domain, different toolset, sibling to ours — use the official Manufact CLI:
+The kit's `mcp/` is hand-authored to fit the workspace (port `3011`, workspace-aware scripts, kit-specific demo widget). If you'd rather scaffold a brand-new MCP server from scratch use the official `create-mcp-use-app` CLI:
 
 ```bash
-npx create-mcp-use-app@latest my-second-server
-cd my-second-server && npm install && npm run dev
+npx create-mcp-use-app@latest my-mcp-server
+cd my-mcp-server && npm install && npm run dev
 ```
 
-This produces the canonical `mcp-use` layout (`index.ts`, `resources/`, `public/`, the same `mcp-use build/dev/deploy` scripts) — equivalent in structure to ours, just unopinionated. Drop it next to `mcp/` and add it to the runtime's `mcpApps.servers[]` array in [`bff/src/server.ts`](bff/src/server.ts) to expose its tools to the agent. See the [create-mcp-use-app docs](https://manufact.com/docs/typescript/getting-started/quickstart) for full options.
+See the [create-mcp-use-app docs](https://manufact.com/docs/typescript/getting-started/quickstart) for full options.
 
 ---
 
