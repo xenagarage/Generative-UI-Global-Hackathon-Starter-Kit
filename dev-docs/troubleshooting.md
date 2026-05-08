@@ -10,7 +10,7 @@
 | Chat hangs forever, never replies | `GEMINI_API_KEY` not set when you skipped the pre-flight (e.g. ran `npm run dev:agent` directly) | Set it in `apps/agent/.env` and restart the agent. The agent now answers in <3s with a setup pointer when the key is missing instead of hanging. |
 | Toast: "Run `npm run seed` to seed the default user" | Postgres `default` / `1_default` user not seeded | Run `npm run seed`. The BFF rewrites the upstream `threads_user_id_fkey` 500 into this hint automatically. |
 | Notion health check returns "0 rows" or "shared with this integration" | Database not shared with your integration | Open the database in Notion → `...` menu → **Connections** → **+ Add connection** → pick your integration **directly** (not via parent-page inheritance — that's the most common gotcha). |
-| `Could not find database with ID …` | Wrong `NOTION_LEADS_DATABASE_ID` *or* not shared | Both — verify by running `cd agent && uv run python -m src.notion_tools --check`. The output names which one is wrong. |
+| `Could not find database with ID …` | Wrong `NOTION_LEADS_DATABASE_ID` *or* not shared | Both — verify by running `cd apps/agent && uv run python -m src.notion_tools --check`. The output names which one is wrong. |
 | `Failed to initialize thread` (raw error, no hint) | BFF couldn't reach Intelligence at all | `docker compose ps` should show `intelligence`, `postgres`, `redis` healthy; if not, `npm run dev:infra:down && npm run dev:infra`. |
 | Empty canvas, no errors anywhere | Agent booted without the integration prompt | Restart the agent (`npm run dev:agent`). The boot log should print `[notion_health_check] db="…" rows=50 …`. |
 
@@ -37,7 +37,7 @@ Free tier is generous but not infinite. Either wait, switch to a paid Gemini key
 
 1. Is the agent running? Check the `agent` log line in your terminal — it should print `Application startup complete` and bind to `:8133`.
 2. Is `GEMINI_API_KEY` set in `apps/agent/.env`?
-3. Run `cd agent && uv run langgraph dev --port 8133` directly to see the actual error.
+3. Run `cd apps/agent && uv run langgraph dev --port 8133` directly to see the actual error.
 
 </details>
 
@@ -87,7 +87,7 @@ Most common causes: license token missing/invalid, port collision on `:4203` / `
 <summary><strong>Python import errors after install</strong></summary>
 
 ```bash
-cd agent
+cd apps/agent
 rm -rf .venv
 uv venv
 uv sync
