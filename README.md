@@ -170,7 +170,7 @@ This opens a public HTTPS URL like `https://<subdomain>.local.mcp-use.run/mcp`. 
 - **Claude:** Settings → Integrations → Add integration → paste URL
 - **ChatGPT:** Settings → Connectors → Add MCP server → paste URL
 
-Smoke-test prompts:
+Smoke-test prompts (sample data is baked into each widget — no setup needed):
 - "Show me the workshop lead list." → `show-lead-list`
 - "Show the workshop demand breakdown." → `show-lead-demand`
 - "Show me the lead pipeline." → `show-lead-pipeline`
