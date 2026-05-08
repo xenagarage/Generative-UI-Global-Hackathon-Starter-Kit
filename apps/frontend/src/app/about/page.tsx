@@ -213,7 +213,7 @@ function Section({
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[0.8em]">
+    <code className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[0.8em] break-all">
       {children}
     </code>
   );
