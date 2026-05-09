@@ -139,8 +139,11 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
   useEffect(() => {
     let isCancelled = false;
     let resizeHandler: (() => void) | null = null;
+    let resizeObserver: ResizeObserver | null = null;
     let rafId = 0;
     let timeoutId = 0;
+    let lastWidth = 0;
+    let lastHeight = 0;
 
     const initMap = async () => {
       if (!containerRef.current || stateRef.current) return;
@@ -156,6 +159,12 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
       const syncSize = () => {
         map.invalidateSize({ pan: false });
+      };
+      const scheduleSync = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          syncSize();
+        });
       };
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -195,12 +204,32 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
       stateRef.current = { L, map, layers: [], animFrame: 0 };
 
+      // Track container size changes (including chat sidebar layout shifts).
+      if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+        resizeObserver = new ResizeObserver((entries) => {
+          const rect = entries[0]?.contentRect;
+          if (!rect) return;
+
+          const nextWidth = Math.round(rect.width);
+          const nextHeight = Math.round(rect.height);
+          if (nextWidth <= 0 || nextHeight <= 0) return;
+          if (nextWidth === lastWidth && nextHeight === lastHeight) return;
+
+          lastWidth = nextWidth;
+          lastHeight = nextHeight;
+          scheduleSync();
+        });
+        resizeObserver.observe(containerRef.current);
+      }
+
       // Initial size settle for dynamic layouts and sidebar transitions.
-      rafId = requestAnimationFrame(() => {
-        syncSize();
-        timeoutId = window.setTimeout(syncSize, 180);
-      });
-      resizeHandler = () => syncSize();
+      const initialRect = containerRef.current.getBoundingClientRect();
+      lastWidth = Math.round(initialRect.width);
+      lastHeight = Math.round(initialRect.height);
+      scheduleSync();
+      timeoutId = window.setTimeout(scheduleSync, 220);
+
+      resizeHandler = () => scheduleSync();
       window.addEventListener("resize", resizeHandler);
 
       // Draw initial overlays once the client-only map has been created.
@@ -213,6 +242,7 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
     return () => {
       isCancelled = true;
       if (resizeHandler) window.removeEventListener("resize", resizeHandler);
+      resizeObserver?.disconnect();
       if (rafId) cancelAnimationFrame(rafId);
       if (timeoutId) window.clearTimeout(timeoutId);
       cancelAnimationFrame(stateRef.current?.animFrame ?? 0);
