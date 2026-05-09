@@ -138,6 +138,9 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
   // Initialize map once on mount
   useEffect(() => {
     let isCancelled = false;
+    let resizeHandler: (() => void) | null = null;
+    let rafId = 0;
+    let timeoutId = 0;
 
     const initMap = async () => {
       if (!containerRef.current || stateRef.current) return;
@@ -151,10 +154,15 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
         zoomControl: false,
       });
 
+      const syncSize = () => {
+        map.invalidateSize({ pan: false });
+      };
+
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      // CartoDB Positron — clean, light, free, no API key
-      L.tileLayer(
+      // Prefer CartoDB Positron; if tiles fail repeatedly (common on some
+      // networks), auto-fallback to OpenStreetMap to avoid blank squares.
+      const cartoLayer = L.tileLayer(
         "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
         {
           attribution:
@@ -163,7 +171,37 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
         },
       ).addTo(map);
 
+      let usingFallback = false;
+      let tileErrors = 0;
+      const maybeUseFallback = () => {
+        if (usingFallback || tileErrors < 6) return;
+        usingFallback = true;
+        map.removeLayer(cartoLayer);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution:
+            '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(map);
+        syncSize();
+      };
+
+      cartoLayer.on("tileerror", () => {
+        tileErrors += 1;
+        maybeUseFallback();
+      });
+      cartoLayer.on("tileload", () => {
+        tileErrors = Math.max(0, tileErrors - 1);
+      });
+
       stateRef.current = { L, map, layers: [], animFrame: 0 };
+
+      // Initial size settle for dynamic layouts and sidebar transitions.
+      rafId = requestAnimationFrame(() => {
+        syncSize();
+        timeoutId = window.setTimeout(syncSize, 180);
+      });
+      resizeHandler = () => syncSize();
+      window.addEventListener("resize", resizeHandler);
 
       // Draw initial overlays once the client-only map has been created.
       drawMode(stateRef.current, mode);
@@ -174,6 +212,9 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
     return () => {
       isCancelled = true;
+      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (timeoutId) window.clearTimeout(timeoutId);
       cancelAnimationFrame(stateRef.current?.animFrame ?? 0);
       stateRef.current?.map.remove();
       stateRef.current = null;
@@ -194,6 +235,10 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
       state.map.flyTo(mode.center, mode.zoom, { duration: 0.8 });
     }
     drawMode(state, mode);
+
+    requestAnimationFrame(() => {
+      state.map.invalidateSize({ pan: false });
+    });
   }, [mode]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
