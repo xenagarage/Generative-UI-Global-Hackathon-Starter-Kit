@@ -72,12 +72,11 @@ def fetch_notion_leads(
     agent doesn't need to know which one is active — it just calls this
     tool and gets a populated canvas back.
 
-    Returns a `Command` that updates `leads`, `view`, `header.subtitle`,
-    and `sync` directly on the agent state. The frontend's STATE_SNAPSHOT
+    Returns a `Command` that updates `leads`, `header.subtitle`, and
+    `sync` directly on the agent state. The frontend's STATE_SNAPSHOT
     picks that up so the canvas is populated as a side-effect of this
     single tool call. The agent does NOT need to call setLeads /
-    setView / setHeader / setSyncMeta after this — just reply with a
-    brief summary.
+    setHeader / setSyncMeta after this — just reply with a brief summary.
 
     Why this returns a Command instead of JSON: Gemini 3 Pro stalls for
     minutes when asked to construct `setLeads(leads=[50 fat objects])`
@@ -124,7 +123,6 @@ def fetch_notion_leads(
 
         update: dict[str, Any] = {
             "leads": rows,
-            "view": "pipeline",
             "header": {
                 "title": "Workshop Lead Triage",
                 "subtitle": f"{len(rows)} leads from {source_label} · top demand: {top_workshop}",
@@ -166,11 +164,12 @@ def find_lead(
 ) -> str:
     """Look up the real lead id for a name from state.leads.
 
-    Use this BEFORE calling selectLead / update_notion_lead / renderEmailDraft
-    when you only have a name. NEVER fabricate ids like
-    "<name>-id-placeholder" — they don't exist in state.leads, so selectLead
-    will silently set selectedLeadId to a non-existent id and the modal will
-    not open. Always resolve the real id through this tool.
+    Use this BEFORE calling selectLead / update_notion_lead /
+    commitLeadEdit / renderLeadMiniCard when you only have a name. NEVER
+    fabricate ids like "<name>-id-placeholder" — they don't exist in
+    state.leads, so selectLead will silently set selectedLeadId to a
+    non-existent id and the modal will not open. Always resolve the real
+    id through this tool.
 
     Returns a JSON string:
       - on a single match: {"match": {id, name, role, company, email}}
@@ -517,6 +516,65 @@ def insert_notion_lead(
         )
 
 
+@tool
+def post_lead_comment(
+    leadId: Annotated[str, "The Notion page id of the lead to comment on."],
+    subject: Annotated[
+        str,
+        "The email subject the user approved. Posted as the first bold line of the comment.",
+    ],
+    body: Annotated[str, "The full email body the user approved."],
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
+    """Post an approved email draft as a comment on the lead's Notion page.
+
+    Called AFTER the user clicks Send on the renderEmailDraft HITL card.
+    The comment text is `Subject: …\n\n<body>` so it shows up cleanly in
+    Notion's discussion thread.
+    """
+    try:
+        from .notion_mcp import has_notion_token, mcp_create_comment
+
+        if not has_notion_token():
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=(
+                                "Comment skipped: NOTION_TOKEN is not set. "
+                                "Set it and re-share the database with the integration."
+                            ),
+                            tool_call_id=tool_call_id,
+                        )
+                    ]
+                }
+            )
+
+        text = f"Subject: {subject}\n\n{body}"
+        mcp_create_comment(page_id=leadId, text=text)
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Posted email comment to lead {leadId}.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    except Exception as e:  # noqa: BLE001 - surface error to the LLM
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Comment failed: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+
 def load_notion_tools() -> List[Any]:
     """Return the Notion-flavored backend tool list for the agent.
 
@@ -539,6 +597,7 @@ def load_notion_tools() -> List[Any]:
         notion_health_check,
         update_notion_lead,
         insert_notion_lead,
+        post_lead_comment,
     ]
     print(f"Backend tools loaded: {len(tools)} tools")
     return tools

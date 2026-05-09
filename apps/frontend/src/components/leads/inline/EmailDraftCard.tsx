@@ -1,253 +1,140 @@
 "use client";
 
-/**
- * EmailDraftCard — the agent's draft outreach email, surfaced inline in chat.
- *
- * Two contexts:
- *   - `variant="compact"` (default): subject + body preview + tone tag,
- *     ~320px wide. Fits in the chat sidebar.
- *   - `variant="expanded"`: full editable subject + body, tone toggle, and
- *     a per-paragraph regenerate gesture. Used inside SendQueueModal.
- *
- * The compact form is read-only — the user clicks "Open ↗" to expand into
- * the modal where editing happens. Keeps the chat surface uncluttered.
- *
- * Tone change is a destructive UI action (replaces body), so the toggle
- * fires `onToneChange`; the parent decides whether to re-prompt the agent
- * or do an in-place rewrite. The component does not mutate body itself.
- */
-
 import { useState } from "react";
-import { Mail, RefreshCcw, Send, Sparkles, X } from "lucide-react";
-import {
-  EMAIL_TONES,
-  type EmailDraft,
-  type EmailTone,
-  type Lead,
-} from "@/lib/leads/types";
-
-const TONE_LABEL: Record<EmailTone, string> = {
-  casual: "Casual",
-  technical: "Technical",
-  "founder-to-founder": "Founder-to-founder",
-  "conference-followup": "Conference follow-up",
-};
-
-const TONE_BLURB: Record<EmailTone, string> = {
-  casual: "Conversational, no jargon. ~3 sentences.",
-  technical: "Specific to their stack. Code/repo references OK.",
-  "founder-to-founder": "Direct, brief. Acknowledge the trench.",
-  "conference-followup": "References a specific moment. Tight ask.",
-};
+import { Send, X, RefreshCw, Check } from "lucide-react";
 
 export interface EmailDraftCardProps {
-  lead: Pick<Lead, "id" | "name" | "email" | "company" | "role">;
-  draft: EmailDraft;
-  variant?: "compact" | "expanded";
-  /** Compact: opens the expanded form. Expanded: collapses back. */
-  onToggleExpand?: () => void;
-  /** User picked a different tone; parent decides how to rewrite. */
-  onToneChange?: (tone: EmailTone) => void;
-  /** Trigger an unconditional regenerate of the whole draft. */
+  leadId: string;
+  leadName?: string;
+  leadEmail?: string;
+  initialSubject: string;
+  initialBody: string;
+  /** Called when the user clicks Send. The card resolves to a "sent" view. */
+  onSend: (final: { subject: string; body: string }) => void;
+  /** Called when the user clicks Cancel/Discard. */
+  onCancel?: () => void;
+  /** Called when the user clicks Regenerate. The card stays editable. */
   onRegenerate?: () => void;
-  /** Send / queue from the card. Optional — usually queued through the modal. */
-  onQueue?: () => void;
-  /** Local edits in expanded mode propagate up. */
-  onSubjectChange?: (next: string) => void;
-  onBodyChange?: (next: string) => void;
 }
 
-export function EmailDraftCard({
-  lead,
-  draft,
-  variant = "compact",
-  onToggleExpand,
-  onToneChange,
-  onRegenerate,
-  onQueue,
-  onSubjectChange,
-  onBodyChange,
-}: EmailDraftCardProps) {
-  const [hoveredParaIndex, setHoveredParaIndex] = useState<number | null>(null);
+type Status = "editing" | "sending" | "sent" | "cancelled";
 
-  const isExpanded = variant === "expanded";
-  const paragraphs = draft.body.split(/\n\n+/);
-  const recipient = lead.email
-    ? `${lead.name} <${lead.email}>`
-    : lead.name;
+export function EmailDraftCard({
+  leadId,
+  leadName,
+  leadEmail,
+  initialSubject,
+  initialBody,
+  onSend,
+  onCancel,
+  onRegenerate,
+}: EmailDraftCardProps) {
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
+  const [status, setStatus] = useState<Status>("editing");
+
+  if (status === "sent") {
+    return (
+      <div className="my-2 max-w-[420px] rounded-xl border border-[#DBDBE5] bg-white p-3 text-sm shadow-sm">
+        <div className="flex items-center gap-2 text-foreground">
+          <span className="grid size-5 place-items-center rounded-full bg-[#85ECCE]">
+            <Check className="size-3 text-[#010507]" />
+          </span>
+          <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            posted to notion
+          </span>
+        </div>
+        <p className="mt-2 line-clamp-2 text-foreground">{subject}</p>
+      </div>
+    );
+  }
+
+  if (status === "cancelled") {
+    return (
+      <div className="my-2 max-w-[420px] rounded-xl border border-dashed border-[#DBDBE5] bg-[#F7F7F9] p-3 text-sm">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+          draft discarded
+        </span>
+      </div>
+    );
+  }
+
+  const sending = status === "sending";
 
   return (
-    <div
-      className={`my-2 rounded-xl border border-border bg-card shadow-sm ${
-        isExpanded ? "max-w-[640px]" : "max-w-[360px]"
-      }`}
-    >
-      {/* Header */}
-      <header className="flex items-start gap-2 border-b border-border/60 px-3 py-2.5">
-        <Mail className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Draft outreach
-          </div>
-          <div className="truncate text-[11px] text-foreground">
-            To · {recipient}
-          </div>
-        </div>
-        <ToneTag tone={draft.tone} />
-        {isExpanded && onToggleExpand ? (
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            aria-label="Collapse"
-            className="grid size-5 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <X className="size-3" />
-          </button>
-        ) : null}
-      </header>
-
-      {/* Subject */}
-      <div className="px-3 pt-2.5">
-        <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Subject
-        </div>
-        {isExpanded ? (
-          <input
-            type="text"
-            value={draft.subject}
-            onChange={(e) => onSubjectChange?.(e.target.value)}
-            className="w-full rounded-md border border-border bg-input px-2 py-1 text-sm font-medium text-foreground outline-none focus:border-secondary"
-          />
-        ) : (
-          <div className="text-sm font-medium text-foreground">
-            {draft.subject || "(no subject)"}
-          </div>
-        )}
+    <div className="my-2 w-full max-w-[460px] overflow-hidden rounded-xl border border-[#DBDBE5] bg-white text-sm shadow-sm">
+      <div className="flex items-center gap-2 border-b border-[#DBDBE5] bg-[#FAFAFC] px-3 py-2">
+        <span
+          className="size-2 shrink-0 rounded-full bg-[#BEC2FF]"
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+          email draft
+        </span>
+        <span className="ml-auto truncate font-mono text-[11px] text-muted-foreground">
+          {leadName ?? leadEmail ?? leadId}
+        </span>
       </div>
 
-      {/* Body */}
-      <div className="px-3 py-2.5">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Body
-          </span>
-          {draft.rationale ? (
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Sparkles className="size-2.5 text-secondary" aria-hidden />
-              {draft.rationale}
-            </span>
-          ) : null}
-        </div>
+      <div className="p-3">
+        <label className="mb-1 block font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          subject
+        </label>
+        <input
+          type="text"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          disabled={sending}
+          className="w-full rounded-md border border-[#DBDBE5] bg-white px-2.5 py-1.5 text-foreground outline-none transition focus:border-[#BEC2FF] focus:ring-2 focus:ring-[#BEC2FF]/40 disabled:bg-muted disabled:text-muted-foreground"
+        />
 
-        {isExpanded ? (
-          <textarea
-            value={draft.body}
-            onChange={(e) => onBodyChange?.(e.target.value)}
-            rows={Math.max(6, Math.min(14, paragraphs.length * 3))}
-            className="w-full resize-y rounded-md border border-border bg-input px-2 py-1.5 text-[12px] leading-relaxed text-foreground outline-none focus:border-secondary"
-          />
-        ) : (
-          <div className="space-y-1.5 text-[11px] leading-relaxed text-foreground/85">
-            {paragraphs.slice(0, 3).map((p, i) => (
-              <div
-                key={i}
-                onMouseEnter={() => setHoveredParaIndex(i)}
-                onMouseLeave={() => setHoveredParaIndex(null)}
-                className="group relative"
-              >
-                {p}
-                {/* Per-paragraph regenerate hint (compact view shows on hover) */}
-                {hoveredParaIndex === i && onRegenerate ? (
-                  <button
-                    type="button"
-                    onClick={onRegenerate}
-                    className="absolute -right-1 top-0 inline-flex size-5 items-center justify-center rounded-md bg-card text-muted-foreground shadow ring-1 ring-border hover:text-foreground"
-                    aria-label="Regenerate paragraph"
-                    title="Regenerate this paragraph"
-                  >
-                    <RefreshCcw className="size-3" />
-                  </button>
-                ) : null}
-              </div>
-            ))}
-            {paragraphs.length > 3 ? (
-              <div className="text-[10px] italic text-muted-foreground">
-                + {paragraphs.length - 3} more paragraphs (open to read)
-              </div>
-            ) : null}
-          </div>
-        )}
+        <label className="mb-1 mt-3 block font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          body
+        </label>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          disabled={sending}
+          rows={7}
+          className="w-full resize-y rounded-md border border-[#DBDBE5] bg-white px-2.5 py-1.5 leading-relaxed text-foreground outline-none transition focus:border-[#BEC2FF] focus:ring-2 focus:ring-[#BEC2FF]/40 disabled:bg-muted disabled:text-muted-foreground"
+        />
       </div>
 
-      {/* Tone toggle (expanded only) */}
-      {isExpanded ? (
-        <div className="border-t border-border/60 px-3 py-2.5">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Tone
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {EMAIL_TONES.map((t) => {
-              const active = t === draft.tone;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => onToneChange?.(t)}
-                  title={TONE_BLURB[t]}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {TONE_LABEL[t]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Actions */}
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 bg-muted/20 px-3 py-2.5">
-        {!isExpanded && onToggleExpand ? (
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Open
-          </button>
-        ) : null}
+      <div className="flex items-center gap-2 border-t border-[#DBDBE5] bg-[#FAFAFC] px-3 py-2">
         {onRegenerate ? (
           <button
             type="button"
-            onClick={onRegenerate}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-accent/10"
+            onClick={() => onRegenerate()}
+            disabled={sending}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition hover:bg-[#BEC2FF1A] hover:text-foreground disabled:opacity-50"
           >
-            <RefreshCcw className="size-3" />
-            Regenerate
+            <RefreshCw className="size-3" /> regenerate
           </button>
         ) : null}
-        {onQueue ? (
-          <button
-            type="button"
-            onClick={onQueue}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-secondary/30 bg-secondary/10 px-2.5 py-1 text-[11px] font-medium text-secondary hover:bg-secondary/15"
-          >
-            <Send className="size-3" />
-            Queue to send
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("cancelled");
+            onCancel?.();
+          }}
+          disabled={sending}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition hover:bg-[#BEC2FF1A] hover:text-foreground disabled:opacity-50"
+        >
+          <X className="size-3" /> discard
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("sending");
+            onSend({ subject, body });
+            setStatus("sent");
+          }}
+          disabled={sending || !subject.trim() || !body.trim()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-[#010507] px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-white transition hover:bg-[#2B2B2B] disabled:bg-muted disabled:text-muted-foreground"
+        >
+          <Send className="size-3" /> send
+        </button>
       </div>
     </div>
-  );
-}
-
-function ToneTag({ tone }: { tone: EmailTone }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-secondary/10 px-1.5 py-0.5 text-[10px] font-medium text-secondary ring-1 ring-inset ring-secondary/30">
-      {TONE_LABEL[tone]}
-    </span>
   );
 }
