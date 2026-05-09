@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,13 +10,21 @@ import {
   ShieldCheck,
   Utensils,
 } from "lucide-react";
-import { type ElementType, useState } from "react";
-import type { MapModeGeo } from "./MapCanvas";
+import {
+  useAgent,
+  useConfigureSuggestions,
+  useCopilotKit,
+  useFrontendTool,
+} from "@copilotkit/react-core/v2";
+import { type ElementType, useCallback, useMemo, useState } from "react";
+import { z } from "zod";
+import MapCanvas, { type MapModeGeo } from "./MapCanvas";
 
-const MapCanvas = dynamic(() => import("./MapCanvas"), { ssr: false });
+const MODE_IDS = ["travel", "restaurants", "flooding", "events", "safety"] as const;
+type ModeId = (typeof MODE_IDS)[number];
 
 type Mode = {
-  id: string;
+  id: ModeId;
   label: string;
   Icon: ElementType<{ className?: string }>;
   accent: string;
@@ -213,18 +220,512 @@ const MODES: Mode[] = [
   },
 ];
 
+type ItineraryStop = {
+  time: string;
+  title: string;
+  detail: string;
+  eta: string;
+};
+
+type RestaurantProfile = {
+  id: string;
+  name: string;
+  rating: string;
+  price: string;
+  walk: string;
+  pos: [number, number];
+  summary: string;
+  menu: string[];
+};
+
+const TRAVEL_ITINERARY: ItineraryStop[] = [
+  {
+    time: "08:15",
+    title: "Arrive CDG and transfer",
+    detail: "RER B to Chatelet, then Line 1 to La Defense",
+    eta: "45 min",
+  },
+  {
+    time: "10:00",
+    title: "Client workshop",
+    detail: "La Defense Tower A, check-in closes 09:50",
+    eta: "90 min",
+  },
+  {
+    time: "12:15",
+    title: "Transit to hotel",
+    detail: "Metro + short final walk in 8th arrondissement",
+    eta: "28 min",
+  },
+  {
+    time: "14:00",
+    title: "Partner sync",
+    detail: "Champs-Elysees, contract review and action list",
+    eta: "60 min",
+  },
+];
+
+const RESTAURANT_HOTEL: [number, number] = [48.8608, 2.3588];
+const RESTAURANT_IDS = ["septime", "jacques-genin", "enfants-rouges"] as const;
+
+const RESTAURANTS: RestaurantProfile[] = [
+  {
+    id: "septime",
+    name: "Septime",
+    rating: "4.8",
+    price: "EUR 120 avg",
+    walk: "18 min",
+    pos: [48.8511, 2.3721],
+    summary: "Seasonal tasting menus and strong wine pairing.",
+    menu: [
+      "Smoked eel with green apple",
+      "Asparagus with beurre blanc",
+      "Roasted cod with fennel",
+      "Aged duck breast with cherries",
+      "Hazelnut praline millefeuille",
+    ],
+  },
+  {
+    id: "jacques-genin",
+    name: "Jacques Genin",
+    rating: "4.7",
+    price: "EUR 45 avg",
+    walk: "5 min",
+    pos: [48.8574, 2.3545],
+    summary: "Dessert-focused salon, ideal for shorter dinners.",
+    menu: [
+      "Mille-feuille a la minute",
+      "Warm Paris-Brest",
+      "Single-origin ganache selection",
+      "Salted caramel truffles",
+      "Darjeeling first flush tea",
+    ],
+  },
+  {
+    id: "enfants-rouges",
+    name: "Marche des Enfants Rouges",
+    rating: "4.5",
+    price: "EUR 28 avg",
+    walk: "9 min",
+    pos: [48.856, 2.3612],
+    summary: "Fast casual market with broad cuisine options.",
+    menu: [
+      "Confit chicken sandwich",
+      "Goat cheese tartine",
+      "Bento salmon plate",
+      "Moroccan couscous bowl",
+      "Fresh pressed seasonal juice",
+    ],
+  },
+];
+
+const FLOOD_FORECAST = [
+  { window: "Fri 18:00", levelCm: 34, risk: "Medium" },
+  { window: "Sat 02:00", levelCm: 57, risk: "High" },
+  { window: "Sat 14:00", levelCm: 61, risk: "High" },
+  { window: "Sun 09:00", levelCm: 42, risk: "Medium" },
+];
+
+const FLOOD_ACTIONS = [
+  "Pre-stage barriers at Quai de la Tournelle by 17:00",
+  "Alert transport teams if level exceeds +55 cm",
+  "Move backup power to elevated storage before midnight",
+  "Confirm Pont Neuf evacuation corridor every 3 hours",
+];
+
+const EVENT_RUN_OF_SHOW = [
+  {
+    time: "09:00",
+    venue: "Eiffel Conference Room",
+    item: "Opening pitch + team intros",
+    transit: "Start point",
+  },
+  {
+    time: "11:30",
+    venue: "Pompidou Demo Lab",
+    item: "Product demo and Q&A",
+    transit: "35 min metro",
+  },
+  {
+    time: "14:00",
+    venue: "Palais des Congres",
+    item: "Investor deck + next steps",
+    transit: "22 min taxi",
+  },
+];
+
+const SAFETY_MATRIX = [
+  { zone: "Historic core (1st-6th)", score: 86, level: "Low risk", color: "#4ade80" },
+  { zone: "North Pigalle belt", score: 52, level: "Moderate risk", color: "#facc15" },
+  { zone: "Peripheral east fringe", score: 34, level: "High caution", color: "#f87171" },
+];
+
+const NIGHT_PROTOCOL = [
+  "Prefer metro exits on major boulevards after 22:30",
+  "Use licensed taxi ranks for hotel return after midnight",
+  "Keep route sharing enabled during solo movement",
+  "Avoid isolated canal and park paths at night",
+];
+
 export function MapLab() {
-  const [activeId, setActiveId] = useState("travel");
+  const { agent } = useAgent();
+  const { copilotkit } = useCopilotKit();
+
+  const [activeId, setActiveId] = useState<ModeId>("travel");
   const [prompt, setPrompt] = useState(MODES[0].prompt);
   const [sent, setSent] = useState(false);
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState(RESTAURANTS[0].id);
 
   const mode = MODES.find((m) => m.id === activeId) ?? MODES[0];
+  const selectedRestaurant =
+    RESTAURANTS.find((restaurant) => restaurant.id === selectedRestaurantId) ?? RESTAURANTS[0];
 
-  const handleModeChange = (id: string) => {
+  useConfigureSuggestions({
+    available: "before-first-message",
+    suggestions: [
+      {
+        title: "Travel mode",
+        message: "Switch to Travel mode and optimize the itinerary for fewer transfers.",
+      },
+      {
+        title: "Dinner plan",
+        message: "Switch to Restaurant mode and focus the map on Septime.",
+      },
+      {
+        title: "Flood prep",
+        message: "Switch to Flood mode and show a stricter response checklist.",
+      },
+      {
+        title: "Night safety",
+        message: "Switch to Safety mode and update the prompt for a solo traveler.",
+      },
+    ],
+  });
+
+  const restaurantGeo = useMemo<MapModeGeo>(() => {
+    const center: [number, number] = [
+      (RESTAURANT_HOTEL[0] + selectedRestaurant.pos[0]) / 2,
+      (RESTAURANT_HOTEL[1] + selectedRestaurant.pos[1]) / 2,
+    ];
+
+    return {
+      center,
+      zoom: 15,
+      routeColor: "#f59e0b",
+      routeDashed: true,
+      waypoints: [RESTAURANT_HOTEL, selectedRestaurant.pos],
+      markers: [
+        { pos: RESTAURANT_HOTEL, label: "Your hotel", color: "#9ca3af", ring: false },
+        ...RESTAURANTS.map((restaurant) => ({
+          pos: restaurant.pos,
+          label: `${restaurant.name} ${restaurant.rating}`,
+          color: restaurant.id === selectedRestaurant.id ? "#f59e0b" : "#d6a35f",
+          ring: restaurant.id === selectedRestaurant.id,
+        })),
+      ],
+      zones: [
+        {
+          sw: [selectedRestaurant.pos[0] - 0.0035, selectedRestaurant.pos[1] - 0.006],
+          ne: [selectedRestaurant.pos[0] + 0.0035, selectedRestaurant.pos[1] + 0.006],
+          color: "#f59e0b",
+          label: `${selectedRestaurant.name} focus`,
+        },
+        {
+          sw: [48.856, 2.352],
+          ne: [48.864, 2.364],
+          color: "#fde68a",
+          label: "Le Marais core",
+        },
+      ],
+    };
+  }, [selectedRestaurant]);
+
+  const injectPrompt = useCallback(
+    (text: string) => {
+      if (!agent) return;
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `msg-${Date.now()}`;
+      agent.addMessage({ id, role: "user", content: text });
+      void copilotkit.runAgent({ agent }).catch((error: unknown) => {
+        console.error("map-lab: runAgent failed", error);
+      });
+    },
+    [agent, copilotkit],
+  );
+
+  const handleModeChange = (id: ModeId) => {
     const next = MODES.find((m) => m.id === id);
     if (next) setPrompt(next.prompt);
     setActiveId(id);
     setSent(false);
+  };
+
+  useFrontendTool({
+    name: "mapSetMode",
+    description:
+      "Switch the map-lab scenario mode. Use one of: travel, restaurants, flooding, events, safety.",
+    parameters: z.object({ modeId: z.enum(MODE_IDS) }),
+    handler: async ({ modeId }) => {
+      handleModeChange(modeId);
+      return `mode set to ${modeId}`;
+    },
+  });
+
+  useFrontendTool({
+    name: "mapSetPrompt",
+    description: "Replace the map-lab prompt text shown below the map.",
+    parameters: z.object({ prompt: z.string() }),
+    handler: async ({ prompt: nextPrompt }) => {
+      setPrompt(nextPrompt);
+      setSent(false);
+      return "prompt updated";
+    },
+  });
+
+  useFrontendTool({
+    name: "mapFocusRestaurant",
+    description:
+      "In restaurant mode, focus one restaurant on the map and optionally switch to restaurant mode.",
+    parameters: z.object({
+      restaurantId: z.enum(RESTAURANT_IDS),
+      switchMode: z.boolean().optional(),
+    }),
+    handler: async ({ restaurantId, switchMode }) => {
+      if (switchMode !== false) {
+        handleModeChange("restaurants");
+      }
+      setSelectedRestaurantId(restaurantId);
+      return `restaurant focus set to ${restaurantId}`;
+    },
+  });
+
+  const renderModeLayout = () => {
+    if (activeId === "travel") {
+      return (
+        <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[54vh] min-h-[460px] max-h-[700px]">
+            <MapCanvas mode={mode.geo} />
+          </div>
+
+          <div className="rounded-[2rem] border border-stone-900/10 bg-white/85 p-5 shadow-sm backdrop-blur-sm">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+              Live itinerary
+            </p>
+            <div className="mt-4 space-y-3">
+              {TRAVEL_ITINERARY.map((stop) => (
+                <article key={stop.time} className="rounded-xl border border-stone-900/10 bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] tracking-[0.16em] text-stone-500">
+                      {stop.time}
+                    </span>
+                    <span className="text-xs text-stone-500">{stop.eta}</span>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-stone-900">{stop.title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-stone-600">{stop.detail}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-blue-200/70 bg-blue-50 px-3 py-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+                Planner note
+              </p>
+              <p className="mt-1 text-sm text-blue-900">{mode.insights[0]}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeId === "restaurants") {
+      return (
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[68vh] min-h-[560px] max-h-[840px]">
+            <MapCanvas mode={restaurantGeo} />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[0.4fr_0.6fr]">
+            <div className="rounded-[2rem] border border-stone-900/10 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+                Restaurant selector
+              </p>
+              <label className="mt-3 block text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
+                Choose destination
+              </label>
+              <select
+                value={selectedRestaurantId}
+                onChange={(event) => setSelectedRestaurantId(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-amber-400"
+              >
+                {RESTAURANTS.map((restaurant) => (
+                  <option key={restaurant.id} value={restaurant.id}>
+                    {restaurant.name} · {restaurant.rating}
+                  </option>
+                ))}
+              </select>
+
+              <p className="mt-3 text-sm leading-relaxed text-stone-700">{selectedRestaurant.summary}</p>
+
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                <p>Rating: {selectedRestaurant.rating}</p>
+                <p className="mt-1">Price: {selectedRestaurant.price}</p>
+                <p className="mt-1">Walk time: {selectedRestaurant.walk}</p>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-stone-900/10 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+                {selectedRestaurant.name} menu
+              </p>
+              <ul className="mt-4 grid gap-2 text-sm text-stone-700 md:grid-cols-2">
+                {selectedRestaurant.menu.map((item) => (
+                  <li key={item} className="rounded-lg border border-stone-900/10 bg-white px-3 py-2">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeId === "flooding") {
+      return (
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[60vh] min-h-[500px] max-h-[760px]">
+            <MapCanvas mode={mode.geo} />
+          </div>
+
+          <div className="grid gap-4">
+            <div className="rounded-[2rem] border border-stone-900/10 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+                72h river forecast
+              </p>
+              <div className="mt-4 space-y-3">
+                {FLOOD_FORECAST.map((entry) => (
+                  <div key={entry.window} className="grid grid-cols-[100px_1fr_auto] items-center gap-3">
+                    <span className="text-xs text-stone-600">{entry.window}</span>
+                    <div className="h-2 rounded-full bg-stone-200">
+                      <div
+                        className="h-2 rounded-full"
+                        style={{
+                          width: `${Math.min(100, Math.round((entry.levelCm / 70) * 100))}%`,
+                          backgroundColor:
+                            entry.risk === "High"
+                              ? "#f87171"
+                              : entry.risk === "Medium"
+                                ? "#facc15"
+                                : "#4ade80",
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-stone-700">{entry.levelCm} cm</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-stone-900/10 bg-stone-950 p-5 text-stone-100 shadow-sm">
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-400">
+                Response checklist
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm text-stone-200">
+                {FLOOD_ACTIONS.map((action) => (
+                  <li key={action} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                    {action}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeId === "events") {
+      return (
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[56vh] min-h-[500px] max-h-[760px]">
+            <MapCanvas mode={mode.geo} />
+          </div>
+
+          <div className="rounded-[2rem] border border-stone-900/10 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+              Run of show
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {EVENT_RUN_OF_SHOW.map((slot) => (
+                <article key={slot.time} className="rounded-xl border border-stone-900/10 bg-white p-3">
+                  <p className="font-mono text-[11px] tracking-[0.14em] text-violet-500">{slot.time}</p>
+                  <p className="mt-1 text-sm font-semibold text-stone-900">{slot.venue}</p>
+                  <p className="mt-1 text-xs text-stone-600">{slot.item}</p>
+                  <p className="mt-2 text-xs font-medium text-stone-500">Transit: {slot.transit}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-violet-200/70 bg-violet-50 px-4 py-4">
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-violet-600">
+              Logistics buffers
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm text-violet-900">
+              {mode.insights.map((insight) => (
+                <li key={insight}>• {insight}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[58vh] min-h-[500px] max-h-[760px]">
+          <MapCanvas mode={mode.geo} />
+        </div>
+
+        <div className="grid gap-4">
+          <div className="rounded-[2rem] border border-stone-900/10 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+              Neighborhood safety matrix
+            </p>
+            <div className="mt-4 space-y-3">
+              {SAFETY_MATRIX.map((row) => (
+                <article key={row.zone} className="rounded-lg border border-stone-200 bg-white px-3 py-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-stone-900">{row.zone}</p>
+                    <span className="text-xs text-stone-500">{row.level}</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-stone-200">
+                    <div
+                      className="h-2 rounded-full"
+                      style={{ width: `${row.score}%`, backgroundColor: row.color }}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-stone-900/10 bg-stone-950 p-5 text-stone-100 shadow-sm">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-400">
+              Night arrival protocol
+            </p>
+            <ul className="mt-4 space-y-2.5 text-sm text-stone-200">
+              {NIGHT_PROTOCOL.map((item) => (
+                <li key={item} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -234,7 +735,7 @@ export function MapLab() {
         background: `radial-gradient(ellipse at top, ${mode.bgFrom}, transparent 50%), #f4f1eb`,
       }}
     >
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
         <div className="flex items-center justify-between rounded-3xl border border-stone-900/10 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-stone-500">
@@ -282,81 +783,44 @@ export function MapLab() {
           ))}
         </div>
 
-        <section className="grid gap-4 lg:grid-cols-[1.5fr_0.5fr]">
-          <div
-            className="relative overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl"
-            style={{ height: 540 }}
-          >
-            <MapCanvas mode={mode.geo} />
+        <section className="flex flex-col gap-4">
+          {renderModeLayout()}
 
-            <div className="absolute inset-x-4 bottom-4 z-[1000]">
-              <div className="flex items-start gap-2 rounded-2xl border border-white/60 bg-white/92 px-4 py-3 shadow-lg backdrop-blur-md">
-                <textarea
-                  value={prompt}
-                  onChange={(e) => {
-                    setPrompt(e.target.value);
-                    setSent(false);
-                  }}
-                  rows={2}
-                  className="flex-1 resize-none bg-transparent text-sm leading-relaxed text-stone-800 placeholder-stone-400 outline-none"
-                  placeholder="Describe your scenario…"
-                />
-                <button
-                  onClick={() => setSent(true)}
-                  className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl text-white shadow transition hover:opacity-90"
-                  style={{ backgroundColor: sent ? "#4ade80" : mode.accent }}
-                  aria-label="Send prompt"
-                >
-                  <Send className="size-4" />
-                </button>
-              </div>
-              {sent && (
-                <p className="mt-1.5 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-stone-500">
-                  Prompt sent — connect agent to see the response
-                </p>
-              )}
+          <div className="rounded-[2rem] border border-stone-900/10 bg-white/92 px-4 py-4 shadow-sm backdrop-blur-sm">
+            <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
+              Agent prompt
+            </p>
+            <div className="flex items-start gap-2 rounded-2xl border border-stone-900/10 bg-white px-4 py-3 shadow-sm">
+              <textarea
+                value={prompt}
+                onChange={(event) => {
+                  setPrompt(event.target.value);
+                  setSent(false);
+                }}
+                rows={2}
+                className="flex-1 resize-none bg-transparent text-sm leading-relaxed text-stone-800 placeholder-stone-400 outline-none"
+                placeholder="Describe your scenario..."
+              />
+              <button
+                onClick={() => {
+                  const nextPrompt = prompt.trim();
+                  if (!nextPrompt) return;
+                  setSent(true);
+                  injectPrompt(nextPrompt);
+                }}
+                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl text-white shadow transition hover:opacity-90"
+                style={{ backgroundColor: sent ? "#4ade80" : mode.accent }}
+                aria-label="Send prompt"
+              >
+                <Send className="size-4" />
+              </button>
             </div>
+            {sent && (
+              <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.2em] text-stone-500">
+                Prompt sent - check chat for the agent response
+              </p>
+            )}
           </div>
-
-          <aside className="flex flex-col gap-4">
-            <div className="rounded-[2rem] border border-stone-900/10 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
-              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-500">
-                Agent insights
-              </p>
-              <ul className="mt-4 space-y-3">
-                {mode.insights.map((ins, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2.5 text-sm leading-relaxed text-stone-700"
-                  >
-                    <span
-                      className="mt-1.5 size-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: mode.accent }}
-                    />
-                    {ins}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-[2rem] border border-stone-900/10 bg-stone-950 p-5 text-stone-50 shadow-sm">
-              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-stone-400">
-                Switch mode
-              </p>
-              <div className="mt-4 space-y-2">
-                {MODES.filter((m) => m.id !== activeId).map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleModeChange(m.id)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-stone-200 transition hover:bg-white/10"
-                  >
-                    <m.Icon className="size-4 text-stone-400" />
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </aside>
         </section>
       </div>
     </main>

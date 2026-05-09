@@ -1,8 +1,7 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
 import { useEffect, useRef } from "react";
+import type { Layer as LeafletLayer, Map as LeafletMap } from "leaflet";
 
 // ─── Public types (imported by MapLab via `import type`) ──────────────────────
 
@@ -19,8 +18,9 @@ export type MapModeGeo = {
 // ─── Internal state ────────────────────────────────────────────────────────────
 
 type State = {
-  map: L.Map;
-  layers: L.Layer[];
+  L: typeof import("leaflet");
+  map: LeafletMap;
+  layers: LeafletLayer[];
   animFrame: number;
 };
 
@@ -50,7 +50,7 @@ function posOnRoute(pts: [number, number][], t: number): [number, number] {
 // ─── Overlay rendering ────────────────────────────────────────────────────────
 
 function drawMode(state: State, mode: MapModeGeo) {
-  const { map, layers } = state;
+  const { L, map, layers } = state;
 
   // Coloured zone rectangles
   for (const z of mode.zones) {
@@ -137,29 +137,43 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
   // Initialize map once on mount
   useEffect(() => {
-    if (!containerRef.current) return;
+    let isCancelled = false;
 
-    const map = L.map(containerRef.current, {
-      center: mode.center,
-      zoom: mode.zoom,
-      zoomControl: false,
-    });
+    const initMap = async () => {
+      if (!containerRef.current || stateRef.current) return;
 
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+      const L = await import("leaflet");
+      if (isCancelled || !containerRef.current || stateRef.current) return;
 
-    // CartoDB Positron — clean, light, free, no API key
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
-        maxZoom: 19,
-      },
-    ).addTo(map);
+      const map = L.map(containerRef.current, {
+        center: mode.center,
+        zoom: mode.zoom,
+        zoomControl: false,
+      });
 
-    stateRef.current = { map, layers: [], animFrame: 0 };
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      // CartoDB Positron — clean, light, free, no API key
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        {
+          attribution:
+            '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+          maxZoom: 19,
+        },
+      ).addTo(map);
+
+      stateRef.current = { L, map, layers: [], animFrame: 0 };
+
+      // Draw initial overlays once the client-only map has been created.
+      drawMode(stateRef.current, mode);
+      firstRef.current = false;
+    };
+
+    void initMap();
 
     return () => {
+      isCancelled = true;
       cancelAnimationFrame(stateRef.current?.animFrame ?? 0);
       stateRef.current?.map.remove();
       stateRef.current = null;
@@ -179,8 +193,6 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
     if (!firstRef.current) {
       state.map.flyTo(mode.center, mode.zoom, { duration: 0.8 });
     }
-    firstRef.current = false;
-
     drawMode(state, mode);
   }, [mode]);
 

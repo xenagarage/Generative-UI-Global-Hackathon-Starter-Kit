@@ -6,31 +6,64 @@ import {
 } from "@copilotkit/runtime/v2";
 import { LangGraphAgent } from "@copilotkit/runtime/langgraph";
 
-const intelligence = new CopilotKitIntelligence({
-  apiKey:
-    process.env.INTELLIGENCE_API_KEY ?? "change-me-local-intelligence-key",
-  apiUrl: process.env.INTELLIGENCE_API_URL ?? "http://localhost:4203",
-  wsUrl: process.env.INTELLIGENCE_GATEWAY_WS_URL ?? "ws://localhost:4403",
-});
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+}
+
+const disableIntelligence = /^(1|true|yes)$/i.test(
+  process.env.COPILOTKIT_DISABLE_INTELLIGENCE ?? "",
+);
+const hasIntelligenceConfig =
+  Boolean(process.env.INTELLIGENCE_API_KEY) ||
+  Boolean(process.env.INTELLIGENCE_API_URL) ||
+  Boolean(process.env.INTELLIGENCE_GATEWAY_WS_URL) ||
+  Boolean(process.env.COPILOTKIT_LICENSE_TOKEN);
+
+const intelligenceRuntimeConfig = !disableIntelligence && hasIntelligenceConfig
+  ? {
+      intelligence: new CopilotKitIntelligence({
+        apiKey:
+          process.env.INTELLIGENCE_API_KEY ??
+          "change-me-local-intelligence-key",
+        apiUrl: process.env.INTELLIGENCE_API_URL ?? "http://localhost:4203",
+        wsUrl: process.env.INTELLIGENCE_GATEWAY_WS_URL ?? "ws://localhost:4403",
+      }),
+      identifyUser: () => ({ id: "default", name: "Hackathon User" }),
+      licenseToken: process.env.COPILOTKIT_LICENSE_TOKEN,
+    }
+  : {};
+
+if (!disableIntelligence && !hasIntelligenceConfig) {
+  console.log(
+    "[bff] CopilotKit Intelligence not configured; running in stateless mode.",
+  );
+}
+if (disableIntelligence) {
+  console.log(
+    "[bff] CopilotKit Intelligence disabled via COPILOTKIT_DISABLE_INTELLIGENCE.",
+  );
+}
 
 const agent = new LangGraphAgent({
   deploymentUrl:
-    process.env.LANGGRAPH_DEPLOYMENT_URL ?? "http://localhost:8123",
+    process.env.LANGGRAPH_DEPLOYMENT_URL ?? "http://localhost:8133",
   graphId: "default",
   langsmithApiKey: process.env.LANGSMITH_API_KEY ?? "",
-  // 60 (vs LangGraph default 25) leaves headroom for the deepagents planner
-  // loop on multi-step turns like "draft email + queue".
+  // Keep turn depth conservative by default to avoid runaway tool/model loops.
+  // Override with LANGGRAPH_RECURSION_LIMIT when you intentionally need deeper plans.
   assistantConfig: {
-    recursion_limit: Number(process.env.LANGGRAPH_RECURSION_LIMIT ?? 60),
+    recursion_limit: positiveIntEnv("LANGGRAPH_RECURSION_LIMIT", 20),
   },
 });
 
 const app = createCopilotEndpoint({
   basePath: "/api/copilotkit",
   runtime: new CopilotRuntime({
-    intelligence,
-    identifyUser: () => ({ id: "default", name: "Hackathon User" }),
-    licenseToken: process.env.COPILOTKIT_LICENSE_TOKEN,
+    ...intelligenceRuntimeConfig,
     agents: { default: agent },
     openGenerativeUI: true,
     a2ui: { injectA2UITool: false },
@@ -102,7 +135,7 @@ app.use("*", async (c, next) => {
   }
 });
 
-const port = Number(process.env.PORT) || 4000;
+const port = Number(process.env.PORT) || 4010;
 
 serve({ fetch: app.fetch, port }, () => {
   console.log(`BFF ready at http://localhost:${port}`);

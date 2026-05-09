@@ -51,6 +51,30 @@ NOOP_FALLBACK_MESSAGE = (
 )
 
 
+def _positive_int_env(name: str, fallback: int) -> int:
+    """Read a positive integer env var with fallback on invalid values."""
+    raw = os.getenv(name)
+    if not raw:
+        return fallback
+    try:
+        value = int(raw)
+    except ValueError:
+        return fallback
+    return value if value > 0 else fallback
+
+
+def _positive_float_env(name: str, fallback: float) -> float:
+    """Read a positive float env var with fallback on invalid values."""
+    raw = os.getenv(name)
+    if not raw:
+        return fallback
+    try:
+        value = float(raw)
+    except ValueError:
+        return fallback
+    return value if value > 0 else fallback
+
+
 def build_graph(
     runtime: str,
     *,
@@ -147,16 +171,35 @@ def _gemini_llm():
     """Build the configured Gemini Flash-Lite chat model.
 
     Default: `gemini-3.1-flash-lite` — the high-volume workhorse in the
-    Gemini 3 family. Verified against `langchain-google-genai` 2.x;
-    swap the id here if you want `gemini-3-flash` or a future tier.
+    Gemini 3 family. Verified against `langchain-google-genai` 2.x.
+
+    Cost guardrails (all env-overridable):
+    - GEMINI_MAX_OUTPUT_TOKENS (default 512)
+    - GEMINI_TIMEOUT_SECONDS (default 45)
+    - GEMINI_MAX_RETRIES (default 1)
     """
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "stub"
+    max_output_tokens = _positive_int_env("GEMINI_MAX_OUTPUT_TOKENS", 512)
+    timeout_seconds = _positive_float_env("GEMINI_TIMEOUT_SECONDS", 45.0)
+    max_retries = _positive_int_env("GEMINI_MAX_RETRIES", 1)
+
+    print(
+        "[runtime] Gemini guardrails: "
+        f"max_output_tokens={max_output_tokens} "
+        f"timeout_seconds={timeout_seconds} "
+        f"max_retries={max_retries}",
+        flush=True,
+    )
+
     return ChatGoogleGenerativeAI(
         model="gemini-3.1-flash-lite",
         temperature=0,
         api_key=api_key,
+        max_output_tokens=max_output_tokens,
+        timeout=timeout_seconds,
+        max_retries=max_retries,
     )
 
 
