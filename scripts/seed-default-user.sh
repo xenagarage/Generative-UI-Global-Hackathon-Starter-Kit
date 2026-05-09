@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Seed the `default` and `1_default` users into Intelligence's Postgres.
 #
-# Why: the seed API key `change-me-local-intelligence-key` that the BFF
-# uses to talk to Intelligence resolves to userId='default' inside the
+# Why: the configured Intelligence API key used by the BFF resolves to
+# userId='default' inside the
 # casa-de-erlang org, but Intelligence's built-in migrations only seed three
 # *demo* users (jordan-beamson / alex-typeson / cam-elsworth). The very first
 # thread-create call from the BFF therefore fails with:

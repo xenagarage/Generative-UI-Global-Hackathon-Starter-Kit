@@ -17,18 +17,18 @@ function positiveIntEnv(name: string, fallback: number): number {
 const disableIntelligence = /^(1|true|yes)$/i.test(
   process.env.COPILOTKIT_DISABLE_INTELLIGENCE ?? "",
 );
+const intelligenceApiKey = process.env.INTELLIGENCE_API_KEY?.trim();
 const hasIntelligenceConfig =
-  Boolean(process.env.INTELLIGENCE_API_KEY) ||
+  Boolean(intelligenceApiKey) ||
   Boolean(process.env.INTELLIGENCE_API_URL) ||
   Boolean(process.env.INTELLIGENCE_GATEWAY_WS_URL) ||
   Boolean(process.env.COPILOTKIT_LICENSE_TOKEN);
 
-const intelligenceRuntimeConfig = !disableIntelligence && hasIntelligenceConfig
+const intelligenceRuntimeConfig =
+  !disableIntelligence && intelligenceApiKey
   ? {
       intelligence: new CopilotKitIntelligence({
-        apiKey:
-          process.env.INTELLIGENCE_API_KEY ??
-          "change-me-local-intelligence-key",
+        apiKey: intelligenceApiKey,
         apiUrl: process.env.INTELLIGENCE_API_URL ?? "http://localhost:4203",
         wsUrl: process.env.INTELLIGENCE_GATEWAY_WS_URL ?? "ws://localhost:4403",
       }),
@@ -40,6 +40,12 @@ const intelligenceRuntimeConfig = !disableIntelligence && hasIntelligenceConfig
 if (!disableIntelligence && !hasIntelligenceConfig) {
   console.log(
     "[bff] CopilotKit Intelligence not configured; running in stateless mode.",
+  );
+}
+if (!disableIntelligence && hasIntelligenceConfig && !intelligenceApiKey) {
+  console.log(
+    "[bff] INTELLIGENCE_API_KEY missing; disabling CopilotKit Intelligence " +
+      "and running in stateless mode.",
   );
 }
 if (disableIntelligence) {
