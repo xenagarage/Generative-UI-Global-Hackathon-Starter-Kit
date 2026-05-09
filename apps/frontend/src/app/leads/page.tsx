@@ -22,6 +22,8 @@ import { applyPatch, revertPatch } from "@/lib/leads/optimistic";
 
 import { Header } from "@/components/leads/Header";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
+import { QuickStats } from "@/components/leads/QuickStats";
+import { StatusDonut } from "@/components/leads/StatusDonut";
 import { WorkshopDemand } from "@/components/leads/WorkshopDemand";
 import { LeadMiniCard } from "@/components/leads/inline/LeadMiniCard";
 import { EmailDraftCard } from "@/components/leads/inline/EmailDraftCard";
@@ -623,11 +625,16 @@ function CanvasInner() {
           </div>
         ) : (
           <>
-            <WorkshopDemand
-              leads={state.leads}
-              selectedWorkshops={state.filter.workshops}
-              onPickWorkshop={handlePickWorkshop}
-            />
+            <QuickStats leads={state.leads} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <StatusDonut leads={state.leads} />
+              <WorkshopDemand
+                leads={state.leads}
+                selectedWorkshops={state.filter.workshops}
+                onPickWorkshop={handlePickWorkshop}
+                compact
+              />
+            </div>
             <div className="min-h-0 flex-1 overflow-auto">
               <PipelineBoard
                 leads={visibleLeads}

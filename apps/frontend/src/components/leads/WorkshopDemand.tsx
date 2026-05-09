@@ -41,37 +41,31 @@ export function WorkshopDemand({
 
   if (rows.length === 0) {
     return (
-      <div
-        className={`rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground ${
-          compact ? "max-w-[360px]" : ""
-        }`}
-      >
+      <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
         No leads loaded yet.
       </div>
     );
   }
 
-  const visible = compact ? rows.slice(0, 5) : rows;
+  const visible = compact ? rows.slice(0, 6) : rows;
   const max = Math.max(1, ...visible.map((r) => r.count));
   const selected = new Set(selectedWorkshops ?? []);
 
   return (
     <section
-      className={`rounded-xl border border-border bg-card ${
-        compact ? "max-w-[360px] p-3" : "p-5"
+      className={`flex h-full flex-col rounded-xl border border-border bg-card shadow-sm ${
+        compact ? "p-4" : "p-5"
       }`}
       aria-label="Workshop demand"
     >
-      {!compact ? (
-        <header className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            Workshop demand
-          </h2>
-          <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-            {rows.length} workshops · {leads.length} leads
-          </span>
-        </header>
-      ) : null}
+      <header className="mb-3 flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          workshop demand
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          {rows.length} workshops
+        </span>
+      </header>
       <ul className={`flex flex-col ${compact ? "gap-1.5" : "gap-2"}`}>
         {visible.map((row) => {
           const pct = (row.count / max) * 100;
@@ -89,7 +83,7 @@ export function WorkshopDemand({
                   interactive ? "hover:bg-[#BEC2FF1A]" : ""
                 } ${
                   compact
-                    ? "grid-cols-[110px_minmax(0,1fr)_28px]"
+                    ? "grid-cols-[120px_minmax(0,1fr)_32px]"
                     : "grid-cols-[180px_minmax(0,1fr)_44px]"
                 }`}
               >

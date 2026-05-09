@@ -5,20 +5,22 @@ import { ArrowLeft } from "lucide-react";
 import { LeadMiniCard } from "@/components/leads/inline/LeadMiniCard";
 import { EmailDraftCard } from "@/components/leads/inline/EmailDraftCard";
 import { WorkshopDemand } from "@/components/leads/WorkshopDemand";
+import { QuickStats } from "@/components/leads/QuickStats";
+import { StatusDonut } from "@/components/leads/StatusDonut";
 import { ToolFallbackCard } from "@/components/copilot/ToolFallbackCard";
 import type { Lead } from "@/lib/leads/types";
 
 const MOCK_LEADS: Lead[] = [
-  mockLead("01", "Ada Lovelace", "Mango Labs", "Founder", "Agentic UI (AG-UI)", "Advanced / expert"),
-  mockLead("02", "Grace Hopper", "Yard Robotics", "VP Eng", "Deploying Agents (prod)", "Developer"),
-  mockLead("03", "Linus Pauling", "Helix Health", "Staff Engineer", "RAG & Data Chat", "Developer"),
-  mockLead("04", "Marie Curie", "Atom Industries", "Scientist", "Evaluations & Guardrails", "Some technical"),
-  mockLead("05", "Alan Turing", "Cipher Bio", "Founder", "Agentic UI (AG-UI)", "Developer"),
-  mockLead("06", "Rosa Parks", "Bus Stop AI", "PM", "MCP Apps / Tooling", "Some technical"),
-  mockLead("07", "Nikola Tesla", "Coil Co.", "CTO", "Deploying Agents (prod)", "Advanced / expert"),
-  mockLead("08", "Hedy Lamarr", "Spread Spectrum", "Founder", "RAG & Data Chat", "Developer"),
-  mockLead("09", "Carl Sagan", "Pale Blue", "Researcher", "MCP Apps / Tooling", "Developer"),
-  mockLead("10", "Stephen Hawking", "Black Hole Cap.", "Investor", "Not sure yet", "Non-technical"),
+  mockLead("01", "Ada Lovelace", "Mango Labs", "Founder", "Agentic UI (AG-UI)", "Advanced / expert", "In progress", true),
+  mockLead("02", "Grace Hopper", "Yard Robotics", "VP Eng", "Deploying Agents (prod)", "Developer", "Done", true),
+  mockLead("03", "Linus Pauling", "Helix Health", "Staff Engineer", "RAG & Data Chat", "Developer", "Not started", true),
+  mockLead("04", "Marie Curie", "Atom Industries", "Scientist", "Evaluations & Guardrails", "Some technical", "Not started", false),
+  mockLead("05", "Alan Turing", "Cipher Bio", "Founder", "Agentic UI (AG-UI)", "Developer", "In progress", true),
+  mockLead("06", "Rosa Parks", "Bus Stop AI", "PM", "MCP Apps / Tooling", "Some technical", "Not started", true),
+  mockLead("07", "Nikola Tesla", "Coil Co.", "CTO", "Deploying Agents (prod)", "Advanced / expert", "Done", true),
+  mockLead("08", "Hedy Lamarr", "Spread Spectrum", "Founder", "RAG & Data Chat", "Developer", "Not started", true),
+  mockLead("09", "Carl Sagan", "Pale Blue", "Researcher", "MCP Apps / Tooling", "Developer", "In progress", false),
+  mockLead("10", "Stephen Hawking", "Black Hole Cap.", "Investor", "Not sure yet", "Non-technical", "Not started", true),
 ];
 
 function mockLead(
@@ -28,6 +30,8 @@ function mockLead(
   role: string,
   workshop: string,
   technical_level: string,
+  status: string = "Not started",
+  opt_in: boolean = true,
 ): Lead {
   return {
     id,
@@ -39,8 +43,8 @@ function mockLead(
     interested_in: [],
     tools: [],
     workshop,
-    status: "Not started",
-    opt_in: true,
+    status,
+    opt_in,
     message: "",
     submitted_at: new Date().toISOString(),
   };
@@ -117,6 +121,20 @@ export default function ShowcasePage() {
           else.
         </p>
       </header>
+
+      <Section
+        eyebrow="Canvas dashboard"
+        title="Quick stats + status donut + workshop bars"
+        blurb="The dashboard row above the kanban. Quick stats summarize the canvas at a glance; the donut shows how leads split across kanban statuses; the bars rank workshops by demand. All read directly from agent state, all click-through to filter."
+      >
+        <div className="grid gap-3">
+          <QuickStats leads={MOCK_LEADS} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <StatusDonut leads={MOCK_LEADS} />
+            <WorkshopDemand leads={MOCK_LEADS} compact />
+          </div>
+        </div>
+      </Section>
 
       <Section
         eyebrow="Open generative UI"
