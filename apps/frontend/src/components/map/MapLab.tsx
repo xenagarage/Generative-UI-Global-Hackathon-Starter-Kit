@@ -379,10 +379,6 @@ export function MapLab() {
   const mode = MODES.find((m) => m.id === activeId) ?? MODES[0];
   const selectedRestaurant =
     RESTAURANTS.find((restaurant) => restaurant.id === selectedRestaurantId) ?? RESTAURANTS[0];
-  const mapKey =
-    activeId === "restaurants"
-      ? `${activeId}-${selectedRestaurant.id}`
-      : activeId;
 
   useConfigureSuggestions({
     available: "before-first-message",
@@ -510,7 +506,7 @@ export function MapLab() {
       return (
         <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[54vh] min-h-[460px] max-h-[700px]">
-            <MapCanvas key={mapKey} mode={mode.geo} />
+            <MapCanvas mode={mode.geo} />
           </div>
 
           <div className="rounded-[2rem] border border-stone-900/10 bg-white/85 p-5 shadow-sm backdrop-blur-sm">
@@ -547,7 +543,7 @@ export function MapLab() {
       return (
         <div className="space-y-4">
           <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[68vh] min-h-[560px] max-h-[840px]">
-            <MapCanvas key={mapKey} mode={restaurantGeo} />
+            <MapCanvas mode={restaurantGeo} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[0.4fr_0.6fr]">
@@ -600,7 +596,7 @@ export function MapLab() {
       return (
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[60vh] min-h-[500px] max-h-[760px]">
-            <MapCanvas key={mapKey} mode={mode.geo} />
+            <MapCanvas mode={mode.geo} />
           </div>
 
           <div className="grid gap-4">
@@ -653,7 +649,7 @@ export function MapLab() {
       return (
         <div className="space-y-4">
           <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[56vh] min-h-[500px] max-h-[760px]">
-            <MapCanvas key={mapKey} mode={mode.geo} />
+            <MapCanvas mode={mode.geo} />
           </div>
 
           <div className="rounded-[2rem] border border-stone-900/10 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
@@ -689,7 +685,7 @@ export function MapLab() {
     return (
       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="overflow-hidden rounded-[2rem] border border-stone-900/10 shadow-xl h-[58vh] min-h-[500px] max-h-[760px]">
-          <MapCanvas key={mapKey} mode={mode.geo} />
+          <MapCanvas mode={mode.geo} />
         </div>
 
         <div className="grid gap-4">

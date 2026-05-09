@@ -134,38 +134,10 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<State | null>(null);
   const firstRef = useRef(true);
-  const sizeSyncTimeoutRef = useRef<number | null>(null);
-  const sizeSyncRafRef = useRef<number | null>(null);
-
-  const clearScheduledSizeSync = () => {
-    if (sizeSyncRafRef.current !== null) {
-      cancelAnimationFrame(sizeSyncRafRef.current);
-      sizeSyncRafRef.current = null;
-    }
-    if (sizeSyncTimeoutRef.current !== null) {
-      window.clearTimeout(sizeSyncTimeoutRef.current);
-      sizeSyncTimeoutRef.current = null;
-    }
-  };
-
-  const scheduleSizeSync = () => {
-    clearScheduledSizeSync();
-
-    sizeSyncRafRef.current = requestAnimationFrame(() => {
-      stateRef.current?.map.invalidateSize({ pan: false });
-      sizeSyncRafRef.current = null;
-    });
-
-    sizeSyncTimeoutRef.current = window.setTimeout(() => {
-      stateRef.current?.map.invalidateSize({ pan: false });
-      sizeSyncTimeoutRef.current = null;
-    }, 120);
-  };
 
   // Initialize map once on mount
   useEffect(() => {
     let isCancelled = false;
-    let resizeHandler: (() => void) | null = null;
 
     const initMap = async () => {
       if (!containerRef.current || stateRef.current) return;
@@ -193,13 +165,6 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
       stateRef.current = { L, map, layers: [], animFrame: 0 };
 
-      // Trigger size sync after mount and when the map reports ready.
-      scheduleSizeSync();
-      map.whenReady(() => scheduleSizeSync());
-
-      resizeHandler = () => scheduleSizeSync();
-      window.addEventListener("resize", resizeHandler);
-
       // Draw initial overlays once the client-only map has been created.
       drawMode(stateRef.current, mode);
       firstRef.current = false;
@@ -209,8 +174,6 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
     return () => {
       isCancelled = true;
-      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
-      clearScheduledSizeSync();
       cancelAnimationFrame(stateRef.current?.animFrame ?? 0);
       stateRef.current?.map.remove();
       stateRef.current = null;
@@ -231,8 +194,6 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
       state.map.flyTo(mode.center, mode.zoom, { duration: 0.8 });
     }
     drawMode(state, mode);
-
-    scheduleSizeSync();
   }, [mode]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
