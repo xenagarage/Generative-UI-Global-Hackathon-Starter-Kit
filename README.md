@@ -26,17 +26,17 @@ https://github.com/user-attachments/assets/6f44cf84-e485-4c26-8703-481e0c9c2c54
 
 "Generative UI" describes any AI-driven interface that the agent **chooses, composes, or writes at runtime**. Approaches sit on a spectrum — from **more control** on one end to **more flexibility** on the other — and most real apps mix several tiers.
 
-### Controlled (`useComponent`, `json-render`)
+### Controlled (`useComponent`)
 
-The highest level of control. The developer provides the agent with a set of predefined React components, and the agent selects the appropriate one and populates it with props. This ensures the interface stays on-brand and pixel-perfect, making it ideal for standard, repeatable application workflows.
+The highest level of control. The developer provides the agent with a set of predefined React components, and the agent selects the appropriate one and populates it with props. This ensures the interface stays on-brand and pixel-perfect, making it ideal for standard, repeatable application workflows. See [Display Components](https://docs.copilotkit.ai/generative-ui/your-components/display-only) in the CopilotKit docs.
 
-### Declarative (`A2UI`, `Hashbrown`)
+### Declarative (`A2UI`)
 
-Utilizing the [A2UI](https://a2ui.org/) specification, this method uses a schema to map agent outputs to a catalog of renderers. It offers a balance between control and flexibility, allowing the agent to handle more varied UI layouts without requiring a unique tool for every single component. It is particularly effective for the "long tail" of user interactions.
+Utilizing the [A2UI](https://a2ui.org/) specification, this method uses a schema to map agent outputs to a catalog of renderers. It offers a balance between control and flexibility, allowing the agent to handle more varied UI layouts without requiring a unique tool for every single component. It is particularly effective for the "long tail" of user interactions. See [A2UI](https://docs.copilotkit.ai/generative-ui/a2ui) in the CopilotKit docs.
 
 ### Open-ended (`MCP Apps`, `openGenerativeUI`)
 
-The "Wild West" of generative UI — the agent generates raw HTML that is rendered within a secure, sandboxed double-iframe. While it is the most flexible — enabling the creation of disposable, data-grounded interfaces on the fly — it is the hardest to style consistently and can behave unpredictably. See [opengenerativeui.copilotkit.ai](https://opengenerativeui.copilotkit.ai/) for a live demo.
+The "Wild West" of generative UI — the agent generates raw HTML that is rendered within a secure, sandboxed double-iframe. While it is the most flexible — enabling the creation of disposable, data-grounded interfaces on the fly — it is the hardest to style consistently and can behave unpredictably. See [opengenerativeui.copilotkit.ai](https://opengenerativeui.copilotkit.ai/) for a live demo, and the CopilotKit docs on [MCP Apps](https://docs.copilotkit.ai/generative-ui/mcp-apps) and [Open Generative UI](https://docs.copilotkit.ai/generative-ui/open-generative-ui).
 
 This kit is wired for all three: the canvas surface uses controlled cards for lead entities, A2UI streams declarative components from Gemini, and the deployable MCP server in `apps/mcp/` extends the same agent into Claude and ChatGPT's open-ended generative UI surface.
 
