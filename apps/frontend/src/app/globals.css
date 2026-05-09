@@ -225,3 +225,23 @@ html {
   animation: lead-card-just-synced 800ms ease-out 1;
 }
 
+
+/* ── Leaflet map tooltip overrides ─────────────────────────────────────────── */
+.map-zone-tip,
+.map-tip {
+  background: rgba(15, 15, 15, 0.78);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 3px 8px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.map-zone-tip::before,
+.map-tip::before {
+  display: none;
+}
