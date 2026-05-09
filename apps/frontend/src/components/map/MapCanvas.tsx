@@ -134,10 +134,33 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<State | null>(null);
   const firstRef = useRef(true);
+  const sizeSyncTimeoutsRef = useRef<number[]>([]);
+
+  const clearSizeSyncTimeouts = () => {
+    for (const id of sizeSyncTimeoutsRef.current) {
+      window.clearTimeout(id);
+    }
+    sizeSyncTimeoutsRef.current = [];
+  };
+
+  const scheduleSizeSync = () => {
+    const invalidate = () => {
+      stateRef.current?.map.invalidateSize({ pan: false });
+    };
+
+    invalidate();
+    requestAnimationFrame(invalidate);
+
+    clearSizeSyncTimeouts();
+    sizeSyncTimeoutsRef.current.push(window.setTimeout(invalidate, 120));
+    sizeSyncTimeoutsRef.current.push(window.setTimeout(invalidate, 420));
+  };
 
   // Initialize map once on mount
   useEffect(() => {
     let isCancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let resizeHandler: (() => void) | null = null;
 
     const initMap = async () => {
       if (!containerRef.current || stateRef.current) return;
@@ -165,6 +188,17 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
       stateRef.current = { L, map, layers: [], animFrame: 0 };
 
+      // Leaflet does not auto-detect every layout shift (async fonts, sidebars,
+      // dynamic panels). Schedule a few invalidations to settle tile paint.
+      scheduleSizeSync();
+      map.whenReady(() => scheduleSizeSync());
+      resizeHandler = () => scheduleSizeSync();
+      window.addEventListener("resize", resizeHandler);
+      if (typeof ResizeObserver !== "undefined") {
+        resizeObserver = new ResizeObserver(() => scheduleSizeSync());
+        resizeObserver.observe(containerRef.current);
+      }
+
       // Draw initial overlays once the client-only map has been created.
       drawMode(stateRef.current, mode);
       firstRef.current = false;
@@ -174,6 +208,9 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
     return () => {
       isCancelled = true;
+      if (resizeObserver) resizeObserver.disconnect();
+      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
+      clearSizeSyncTimeouts();
       cancelAnimationFrame(stateRef.current?.animFrame ?? 0);
       stateRef.current?.map.remove();
       stateRef.current = null;
@@ -185,6 +222,8 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
     const state = stateRef.current;
     if (!state) return;
 
+    scheduleSizeSync();
+
     cancelAnimationFrame(state.animFrame);
     state.layers.forEach((l) => l.remove());
     state.layers = [];
@@ -194,6 +233,8 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
       state.map.flyTo(mode.center, mode.zoom, { duration: 0.8 });
     }
     drawMode(state, mode);
+
+    scheduleSizeSync();
   }, [mode]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
