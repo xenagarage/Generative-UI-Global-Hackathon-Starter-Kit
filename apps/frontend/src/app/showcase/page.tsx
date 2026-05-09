@@ -120,6 +120,17 @@ export default function ShowcasePage() {
           React component in chat; the open gen UI fallback catches anything
           else.
         </p>
+        <div className="mt-6">
+          <Link
+            href="/map-lab"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm text-foreground transition hover:border-foreground/20 hover:bg-muted"
+          >
+            <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+              New
+            </span>
+            Open map lab prototype
+          </Link>
+        </div>
       </header>
 
       <Section
