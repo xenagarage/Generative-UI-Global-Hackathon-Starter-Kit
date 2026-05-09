@@ -134,32 +134,37 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<State | null>(null);
   const firstRef = useRef(true);
-  const sizeSyncTimeoutsRef = useRef<number[]>([]);
+  const sizeSyncTimeoutRef = useRef<number | null>(null);
+  const sizeSyncRafRef = useRef<number | null>(null);
 
-  const clearSizeSyncTimeouts = () => {
-    for (const id of sizeSyncTimeoutsRef.current) {
-      window.clearTimeout(id);
+  const clearScheduledSizeSync = () => {
+    if (sizeSyncRafRef.current !== null) {
+      cancelAnimationFrame(sizeSyncRafRef.current);
+      sizeSyncRafRef.current = null;
     }
-    sizeSyncTimeoutsRef.current = [];
+    if (sizeSyncTimeoutRef.current !== null) {
+      window.clearTimeout(sizeSyncTimeoutRef.current);
+      sizeSyncTimeoutRef.current = null;
+    }
   };
 
   const scheduleSizeSync = () => {
-    const invalidate = () => {
+    clearScheduledSizeSync();
+
+    sizeSyncRafRef.current = requestAnimationFrame(() => {
       stateRef.current?.map.invalidateSize({ pan: false });
-    };
+      sizeSyncRafRef.current = null;
+    });
 
-    invalidate();
-    requestAnimationFrame(invalidate);
-
-    clearSizeSyncTimeouts();
-    sizeSyncTimeoutsRef.current.push(window.setTimeout(invalidate, 120));
-    sizeSyncTimeoutsRef.current.push(window.setTimeout(invalidate, 420));
+    sizeSyncTimeoutRef.current = window.setTimeout(() => {
+      stateRef.current?.map.invalidateSize({ pan: false });
+      sizeSyncTimeoutRef.current = null;
+    }, 120);
   };
 
   // Initialize map once on mount
   useEffect(() => {
     let isCancelled = false;
-    let resizeObserver: ResizeObserver | null = null;
     let resizeHandler: (() => void) | null = null;
 
     const initMap = async () => {
@@ -188,16 +193,12 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
       stateRef.current = { L, map, layers: [], animFrame: 0 };
 
-      // Leaflet does not auto-detect every layout shift (async fonts, sidebars,
-      // dynamic panels). Schedule a few invalidations to settle tile paint.
+      // Trigger size sync after mount and when the map reports ready.
       scheduleSizeSync();
       map.whenReady(() => scheduleSizeSync());
+
       resizeHandler = () => scheduleSizeSync();
       window.addEventListener("resize", resizeHandler);
-      if (typeof ResizeObserver !== "undefined") {
-        resizeObserver = new ResizeObserver(() => scheduleSizeSync());
-        resizeObserver.observe(containerRef.current);
-      }
 
       // Draw initial overlays once the client-only map has been created.
       drawMode(stateRef.current, mode);
@@ -208,9 +209,8 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
 
     return () => {
       isCancelled = true;
-      if (resizeObserver) resizeObserver.disconnect();
       if (resizeHandler) window.removeEventListener("resize", resizeHandler);
-      clearSizeSyncTimeouts();
+      clearScheduledSizeSync();
       cancelAnimationFrame(stateRef.current?.animFrame ?? 0);
       stateRef.current?.map.remove();
       stateRef.current = null;
@@ -221,8 +221,6 @@ export default function MapCanvas({ mode }: { mode: MapModeGeo }) {
   useEffect(() => {
     const state = stateRef.current;
     if (!state) return;
-
-    scheduleSizeSync();
 
     cancelAnimationFrame(state.animFrame);
     state.layers.forEach((l) => l.remove());
